@@ -418,26 +418,22 @@ async function sendBookingConfirmationEmail(slotData, clientName, clientEmail, c
   `;
 
   try {
-    await fetch("https://formsubmit.co/ajax/" + encodeURIComponent(clientEmail), {
+    await fetch("https://us-central1-guyhadas-e38c4.cloudfunctions.net/sendEmailDirect", {
       method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        _subject: subject,
-        _cc: GUY_CALENDAR_EMAIL,
-        _html: htmlBody,
-        message: `היי ${clientName},\n\nהפגישה בינינו נקבעה בהצלחה ביומן:\nמועד: ${slotData.dayName}, ${slotData.dateStr} בשעה ${slotData.timeStr}\nקישור Google Meet: ${meetLink}\n\nבברכה,\nגיא הדס\n052-594-9682`,
-        meetingDate: slotData.dateStr,
-        meetingTime: slotData.timeStr,
-        meetLink: meetLink,
-        googleCalUrl: googleCalUrl
+        to: clientEmail,
+        cc: GUY_CALENDAR_EMAIL,
+        subject: subject,
+        html: htmlBody,
+        text: `היי ${clientName},\n\nהפגישה בינינו נקבעה בהצלחה ביומן:\nמועד: ${slotData.dayName}, ${slotData.dateStr} בשעה ${slotData.timeStr}\nקישור Google Meet: ${meetLink}\n\nבברכה,\nגיא הדס\n052-594-9682`
       })
     });
-    console.log("Luxury meeting confirmation email sent to:", clientEmail);
+    console.log("Direct white-label meeting confirmation email sent to:", clientEmail);
   } catch (err) {
-    console.warn("Could not send meeting confirmation email:", err);
+    console.warn("Could not send direct meeting email:", err);
   }
 }
 

@@ -305,26 +305,22 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
 
     try {
-      await fetch("https://formsubmit.co/ajax/" + encodeURIComponent(lead.email), {
+      await fetch("https://us-central1-guyhadas-e38c4.cloudfunctions.net/sendEmailDirect", {
         method: "POST",
         headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          _subject: subject,
-          _cc: "mr.hadas@gmail.com",
-          _html: htmlBody,
-          message: `היי ${lead.fullName},\n\nשמחתי לקבל את פנייתך באתר.\n\nלמילוי טופס ההיכרות ובחירת מועד לשיחה ביומן:\n${prepUrl}\n\nבברכה,\nגיא הדס\n052-594-9682`,
-          leadName: lead.fullName,
-          leadPhone: lead.phone,
-          leadBusiness: lead.business,
-          prepUrl: prepUrl
+          to: lead.email,
+          cc: "mr.hadas@gmail.com",
+          subject: subject,
+          html: htmlBody,
+          text: `היי ${lead.fullName},\n\nשמחתי לקבל את פנייתך באתר.\n\nלמילוי טופס ההיכרות ובחירת מועד לשיחה ביומן:\n${prepUrl}\n\nבברכה,\nגיא הדס\n052-594-9682`
         })
       });
-      console.log("Automated luxury lead email dispatched successfully to:", lead.email);
+      console.log("Direct white-label lead email dispatched successfully to:", lead.email);
     } catch (err) {
-      console.warn("Could not send automated background email:", err);
+      console.warn("Could not send direct email:", err);
     }
   }
 });
