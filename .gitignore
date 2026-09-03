@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+functions/node_modules/
+
+# Firebase cache and logs
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+functions/firebase-debug.log
+functions/firebase-debug.*.log
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Temp / Agent files
+*.local

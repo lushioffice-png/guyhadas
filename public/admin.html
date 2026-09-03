@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>פורטל ניהול לידים | גיא הדס</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800;900&family=Assistant:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="admin.css?v=1.0.0">
+</head>
+<body>
+
+  <!-- 1. LOGIN OVERLAY (Password Protected) -->
+  <div id="login-modal" class="login-wrapper">
+    <div class="login-card">
+      <div class="login-header">
+        <div class="lock-icon">🔒</div>
+        <h2>פורטל ניהול לידים</h2>
+        <p>גיא הדס | Executive Operations & Execution</p>
+      </div>
+      <form id="login-form">
+        <div class="form-group">
+          <label for="admin-password">סיסמת כניסה</label>
+          <input type="password" id="admin-password" placeholder="הזן סיסמה..." autocomplete="current-password" required autofocus>
+          <span id="login-error" class="login-error">סיסמה שגויה, נסה שוב.</span>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block" id="login-btn">כניסה למערכת</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 2. MAIN ADMIN APP (Visible after login) -->
+  <div id="admin-app" class="admin-app hidden">
+    
+    <!-- Top Bar -->
+    <header class="admin-header">
+      <div class="admin-container header-inner">
+        <div class="brand-group">
+          <h1 class="admin-brand">גיא הדס</h1>
+          <span class="admin-badge">פורטל ניהול</span>
+        </div>
+
+        <div class="header-right">
+          <a href="/" class="btn btn-outline btn-sm" target="_blank">מעבר לאתר הראשי ↗</a>
+          <button id="logout-btn" class="btn btn-secondary btn-sm">יציאה</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Stats Bar -->
+    <section class="stats-section">
+      <div class="admin-container">
+        <div class="stats-grid">
+          <div class="stat-box">
+            <span class="stat-title">סה"כ לידים</span>
+            <strong id="stat-total" class="stat-val">0</strong>
+          </div>
+          <div class="stat-box">
+            <span class="stat-title">לידים חדשים</span>
+            <strong id="stat-new" class="stat-val text-emerald">0</strong>
+          </div>
+          <div class="stat-box">
+            <span class="stat-title">שאלון הכנה מולא</span>
+            <strong id="stat-prep" class="stat-val text-blue">0</strong>
+          </div>
+          <div class="stat-box">
+            <span class="stat-title">שיחות שנקבעו ביומן</span>
+            <strong id="stat-meetings" class="stat-val text-emerald">0</strong>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Navigation Tabs -->
+    <div class="tabs-nav-bar">
+      <div class="admin-container">
+        <div class="tabs-group">
+          <button class="tab-btn active" data-tab="leads-tab">📋 רשימת לידים (<span id="leads-tab-count">0</span>)</button>
+          <button class="tab-btn" data-tab="meetings-tab">📅 יומן ושיחות מתואמות (<span id="meetings-tab-count">0</span>)</button>
+          <button class="tab-btn" data-tab="questions-tab">📝 שאלון הכנה לשיחה</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <main class="admin-container main-content">
+      
+      <!-- TAB 1: LEADS MANAGEMENT -->
+      <section id="leads-tab" class="tab-pane active">
+        <div class="pane-header">
+          <div class="search-filter-group">
+            <input type="text" id="lead-search" class="search-input" placeholder="חיפוש לפי שם, טלפון, מייל או עסק...">
+            <select id="status-filter" class="filter-select">
+              <option value="all">כל הסטטוסים</option>
+              <option value="new">חדש</option>
+              <option value="contacted">נוצר קשר</option>
+              <option value="prep_done">שאלון מולא</option>
+              <option value="meeting_set">נקבעה שיחה</option>
+              <option value="completed">הושלם</option>
+            </select>
+          </div>
+          <div class="actions-group">
+            <button id="export-csv-btn" class="btn btn-outline btn-sm">📥 ייצוא ל-Excel / CSV</button>
+            <button id="refresh-leads-btn" class="btn btn-outline btn-sm">🔄 רענון</button>
+          </div>
+        </div>
+
+        <!-- Leads List Container -->
+        <div id="leads-loading" class="loading-box">
+          <div class="spinner"></div>
+          <p>טוען לידים ממסד הנתונים...</p>
+        </div>
+
+        <div id="leads-empty" class="empty-box hidden">
+          <div class="empty-icon">📭</div>
+          <h3>אין לידים להצגה כרגע</h3>
+          <p>לידים חדשים שימלאו את הטופס באתר יופיעו כאן בזמן אמת.</p>
+        </div>
+
+        <div id="leads-list" class="leads-list">
+          <!-- Dynamically Rendered Leads -->
+        </div>
+      </section>
+
+      <!-- TAB 2: MEETINGS & CALENDAR -->
+      <section id="meetings-tab" class="tab-pane hidden">
+        <div class="pane-header">
+          <div>
+            <h2 class="pane-title">שיחות מתואמות ביומן</h2>
+            <p class="pane-desc">כל הפגישות שנקבעו מול הלידים (עד 3 שיחות בשבוע, מסונכרן מול mr.hadas@gmail.com).</p>
+          </div>
+          <div class="actions-group">
+            <a href="/book.html" target="_blank" class="btn btn-outline btn-sm">👁️ תצוגה מקדימה של עמוד הזימון</a>
+          </div>
+        </div>
+
+        <div id="meetings-list" class="meetings-list">
+          <!-- Dynamically Rendered Booked Meetings -->
+        </div>
+      </section>
+
+      <!-- TAB 3: INTAKE QUESTIONS BUILDER -->
+      <section id="questions-tab" class="tab-pane hidden">
+        <div class="pane-header">
+          <div>
+            <h2 class="pane-title">שאלון הכנה לשיחה (Pre-Call Intake)</h2>
+            <p class="pane-desc">השאלות שיופיעו לליד בטופס האונליין לפני קביעת השיחה. התשובות יישמרו ישירות בכרטיס הליד.</p>
+          </div>
+          <div class="actions-group">
+            <button id="add-question-btn" class="btn btn-primary btn-sm">+ הוספת שאלה</button>
+            <a href="/prep.html" target="_blank" class="btn btn-outline btn-sm">👁️ תצוגה מקדימה של השאלון</a>
+          </div>
+        </div>
+
+        <div id="questions-list" class="questions-list">
+          <!-- Dynamically Rendered Questions -->
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- MODAL: LEAD INTAKE ANSWERS DETAIL -->
+  <div id="answers-modal" class="modal-backdrop hidden">
+    <div class="modal-card wide">
+      <div class="modal-header">
+        <h3 id="modal-lead-name">תשובות שאלון הכנה</h3>
+        <button class="modal-close" id="close-answers-modal-btn">✕</button>
+      </div>
+      <div class="modal-body" id="answers-modal-content">
+        <!-- Answers rendered dynamically -->
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="confirm-answers-modal-btn">סגירה</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD / EDIT QUESTION -->
+  <div id="question-modal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="question-modal-title">הוספת שאלה לשאלון</h3>
+        <button class="modal-close" id="close-question-modal-btn">✕</button>
+      </div>
+      <form id="question-form">
+        <div class="modal-body">
+          <input type="hidden" id="edit-question-id">
+          <div class="form-group">
+            <label for="question-text">ניסוח השאלה *</label>
+            <textarea id="question-text" rows="3" placeholder="למשל: מה היעד המרכזי שתרצה להשיג ב-3 החודשים הקרובים?" required></textarea>
+          </div>
+          <div class="form-group">
+            <label for="question-type">סוג תשובה</label>
+            <select id="question-type">
+              <option value="textarea">טקסט פתוח ומפורט (תשובה ארוכה)</option>
+              <option value="text">טקסט קצר (שורה אחת)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="question-placeholder">טקסט עזר / הסבר קצר (Placeholder)</label>
+            <input type="text" id="question-placeholder" placeholder="למשל: תאר בקצרה את היעד המספרי...">
+          </div>
+          <div class="form-group checkbox-group">
+            <label>
+              <input type="checkbox" id="question-required" checked>
+              שאלת חובה למילוי
+            </label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="cancel-question-btn">ביטול</button>
+          <button type="submit" class="btn btn-primary" id="save-question-btn">שמירת שאלה</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: EMAIL DRAFT TEMPLATE -->
+  <div id="email-modal" class="modal-backdrop hidden">
+    <div class="modal-card wide">
+      <div class="modal-header">
+        <h3 id="email-modal-title">נוסח אימייל מוכן לליד</h3>
+        <button class="modal-close" id="close-email-modal-btn">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>נושא המייל (Subject):</label>
+          <input type="text" id="email-subject-box" readonly class="copyable-input">
+        </div>
+        <div class="form-group">
+          <label>גוף המייל (Body):</label>
+          <textarea id="email-body-box" rows="8" readonly class="copyable-input"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="close-email-btn">סגירה</button>
+        <button class="btn btn-primary" id="copy-email-btn">📋 העתק נוסח מייל מלא</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast hidden"></div>
+
+  <!-- Firebase & Admin Bundle -->
+  <script type="module" src="admin.js?v=1.0.0"></script>
+</body>
+</html>

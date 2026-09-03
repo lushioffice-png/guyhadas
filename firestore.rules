@@ -1,0 +1,33 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+    
+    // Leads collection
+    match /leads/{leadId} {
+      // Public creation from landing page
+      allow create: if request.resource.data.fullName is string
+                    && request.resource.data.fullName.size() >= 2
+                    && request.resource.data.phone is string;
+      
+      // Allow reading and updating from admin portal or questionnaire submission
+      allow read, update: if true;
+      allow delete: if true;
+    }
+
+    // Intake questions settings collection
+    match /settings/{settingId} {
+      allow read, write: if true;
+    }
+
+    // Calendar bookings & slot locks
+    match /bookings/{bookingId} {
+      allow read, write: if true;
+    }
+  }
+}
