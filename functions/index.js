@@ -186,20 +186,17 @@ exports.sendEmailDirect = functions.https.onRequest(async (req, res) => {
       return;
     }
 
-    // Configure Direct SMTP Transporter (or Resend API fallback)
-    // Using standard sendmail/direct SMTP transport
+    // Configure Direct Gmail SMTP Transporter with Google App Password
     const transporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 465,
-      secure: true,
+      service: "gmail",
       auth: {
-        user: process.env.SMTP_USER || "mr.hadas@gmail.com",
-        pass: process.env.SMTP_PASS || ""
+        user: "mr.hadas@gmail.com",
+        pass: "pmghbrgeulsawdir"
       }
     });
 
     const mailOptions = {
-      from: `"גיא הדס | Executive Operations" <${process.env.SMTP_USER || "mr.hadas@gmail.com"}>`,
+      from: `"גיא הדס | Executive Operations" <mr.hadas@gmail.com>`,
       to: to,
       cc: cc || "mr.hadas@gmail.com",
       subject: subject,
@@ -207,14 +204,9 @@ exports.sendEmailDirect = functions.https.onRequest(async (req, res) => {
       text: text || ""
     };
 
-    // If SMTP credentials not provided, use Resend or direct mail service
-    try {
-      await transporter.sendMail(mailOptions);
-      res.status(200).json({ success: true, message: "Email sent directly via SMTP" });
-    } catch (smtpErr) {
-      console.warn("SMTP send note, falling back to direct delivery:", smtpErr.message);
-      res.status(200).json({ success: true, note: "Handled" });
-    }
+    const info = await transporter.sendMail(mailOptions);
+    console.log("Email dispatched successfully directly from Gmail:", info.messageId);
+    res.status(200).json({ success: true, messageId: info.messageId });
   } catch (err) {
     console.error("Error in sendEmailDirect:", err);
     res.status(500).json({ success: false, error: err.message });
