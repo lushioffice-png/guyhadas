@@ -417,6 +417,33 @@ async function sendBookingConfirmationEmail(slotData, clientName, clientEmail, c
 </html>
   `;
 
+  // Generate standard iCalendar REQUEST invite string for automatic calendar insertion
+  const startDate = new Date(slotData.startIso);
+  const endDate = new Date(slotData.endIso);
+
+  const icsInviteString = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Guy Hadas//Executive Operations Booking//HE',
+    'CALSCALE:GREGORIAN',
+    'METHOD:REQUEST',
+    'BEGIN:VEVENT',
+    `DTSTART:${toIcsFormat(startDate)}`,
+    `DTEND:${toIcsFormat(endDate)}`,
+    `DTSTAMP:${toIcsFormat(new Date())}`,
+    `UID:${slotData.slotId}@guyhadas.xyz`,
+    `SEQUENCE:0`,
+    `SUMMARY:שיחה עם גיא הדס`,
+    `DESCRIPTION:שיחה אישית בת שעה עם גיא הדס (Executive Operations & Execution).\\nלינק ישיר ל-Google Meet: ${meetLink}`,
+    `LOCATION:${meetLink}`,
+    `ORGANIZER;CN=Guy Hadas:mailto:${GUY_CALENDAR_EMAIL}`,
+    `ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;CN=Guy Hadas:mailto:${GUY_CALENDAR_EMAIL}`,
+    clientEmail ? `ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;CN=${clientName}:mailto:${clientEmail}` : '',
+    'STATUS:CONFIRMED',
+    'END:VEVENT',
+    'END:VCALENDAR'
+  ].filter(Boolean).join('\r\n');
+
   try {
     await fetch("https://us-central1-guyhadas-e38c4.cloudfunctions.net/sendEmailDirect", {
       method: "POST",
@@ -428,10 +455,11 @@ async function sendBookingConfirmationEmail(slotData, clientName, clientEmail, c
         cc: GUY_CALENDAR_EMAIL,
         subject: subject,
         html: htmlBody,
-        text: `היי ${clientName},\n\nהפגישה בינינו נקבעה בהצלחה ביומן:\nמועד: ${slotData.dayName}, ${slotData.dateStr} בשעה ${slotData.timeStr}\nקישור Google Meet: ${meetLink}\n\nבברכה,\nגיא הדס\n052-594-9682`
+        text: `היי ${clientName},\n\nהפגישה בינינו נקבעה בהצלחה ביומן:\nמועד: ${slotData.dayName}, ${slotData.dateStr} בשעה ${slotData.timeStr}\nקישור Google Meet: ${meetLink}\n\nבברכה,\nגיא הדס\n052-594-9682`,
+        icsContent: icsInviteString
       })
     });
-    console.log("Direct white-label meeting confirmation email sent to:", clientEmail);
+    console.log("Direct white-label meeting confirmation email with calendar invite sent to:", clientEmail);
   } catch (err) {
     console.warn("Could not send direct meeting email:", err);
   }

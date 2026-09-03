@@ -180,7 +180,7 @@ exports.sendEmailDirect = functions.https.onRequest(async (req, res) => {
   }
 
   try {
-    const { to, subject, html, text, cc } = req.body;
+    const { to, subject, html, text, cc, icsContent } = req.body;
     if (!to || !subject || (!html && !text)) {
       res.status(400).json({ success: false, error: "Missing required fields: to, subject, html" });
       return;
@@ -203,6 +203,21 @@ exports.sendEmailDirect = functions.https.onRequest(async (req, res) => {
       html: html,
       text: text || ""
     };
+
+    // If an iCal calendar invite is provided, attach it as a native calendar REQUEST
+    if (icsContent) {
+      mailOptions.icalEvent = {
+        filename: "invite.ics",
+        method: "REQUEST",
+        content: icsContent
+      };
+      mailOptions.alternatives = [
+        {
+          contentType: 'text/calendar; charset="UTF-8"; method=REQUEST',
+          content: Buffer.from(icsContent)
+        }
+      ];
+    }
 
     const info = await transporter.sendMail(mailOptions);
     console.log("Email dispatched successfully directly from Gmail:", info.messageId);
