@@ -20,38 +20,6 @@
 </head>
 <body>
 
-  <!-- 1. HEADER (Brand & Direct Contact: Call + WhatsApp) -->
-  <header class="site-header" id="site-header">
-    <div class="container header-container">
-      <a href="#hero" class="brand-logo" aria-label="דף הבית - גיא הדס">
-        <span class="brand-name">גיא הדס</span>
-        <span class="brand-sub">ייעול תהליכים ואופרציה עסקית</span>
-      </a>
-
-      <div class="header-actions">
-        <!-- Direct Book Call Button -->
-        <a href="#contact-form" class="btn header-action-btn header-book-btn" aria-label="קביעת שיחה עם גיא הדס">
-          <span>קביעת שיחה</span>
-        </a>
-        <!-- WhatsApp Direct Link -->
-        <a href="https://wa.me/972525949682?text=%D7%94%D7%99%D7%99%20%D7%92%D7%99%D7%90,%20%D7%94%D7%92%D7%A2%D7%AA%D7%99%20%D7%93%D7%A8%D7%9A%20%D7%94%D7%90%D7%AA%D7%A8%20%D7%95%D7%90%D7%A9%D7%9E%D7%97%20%D7%9C%D7%A9%D7%95%D7%97%D7%97" class="btn btn-whatsapp header-action-btn" target="_blank" rel="noopener noreferrer" aria-label="שליחת הודעה בווטסאפ">
-          <svg class="action-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-            <path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0 0 12.04 2zm.01 1.67c2.2 0 4.26.86 5.82 2.42a8.225 8.225 0 0 1 2.41 5.83c0 4.54-3.7 8.24-8.24 8.24-1.48 0-2.93-.4-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.196 8.196 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.24-8.24zm4.52 11.66c-.25-.13-1.47-.72-1.7-.81-.23-.08-.39-.13-.56.13-.17.25-.64.81-.79.97-.14.17-.29.19-.54.06-.25-.13-1.06-.39-2.02-1.25-.75-.67-1.26-1.5-1.4-1.76-.15-.25-.02-.39.11-.51.11-.11.25-.29.38-.44.13-.14.17-.25.25-.42.08-.17.04-.31-.02-.44-.06-.13-.56-1.34-.76-1.84-.2-.48-.4-.42-.56-.43h-.48c-.17 0-.44.06-.67.31-.23.25-.88.86-.88 2.1 0 1.23.9 2.43 1.02 2.6.13.17 1.77 2.7 4.29 3.79.6.26 1.07.41 1.43.53.6.19 1.15.16 1.58.1.48-.07 1.47-.6 1.68-1.18.21-.58.21-1.08.15-1.18-.07-.1-.23-.17-.48-.29z"/>
-          </svg>
-          <span class="action-text">וואטסאפ</span>
-        </a>
-
-        <!-- Phone Direct Call Link -->
-        <a href="tel:0525949682" class="btn btn-phone header-action-btn" aria-label="חיוג לטלפון 052-5949682">
-          <svg class="action-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
-          </svg>
-          <span class="action-text phone-digits" dir="ltr">052-594-9682</span>
-        </a>
-      </div>
-    </div>
-  </header>
-
   <main>
     <!-- 2. HERO SECTION (חלופה 1 עם שילוב תמונה אקזקוטיבי) -->
     <section class="hero-section" id="hero">
@@ -60,6 +28,15 @@
           
           <!-- Right Col: Hero Content -->
           <div class="hero-content">
+            <!-- Executive Tagline / Kicker cleanly above the question -->
+            <div class="hero-tagline-wrap">
+              <span class="hero-tagline-pill">
+                <span class="tagline-brand">גיא הדס</span>
+                <span class="tagline-sep">—</span>
+                <span class="tagline-desc">ייעול תהליכים ואופרציה עסקית</span>
+              </span>
+            </div>
+
             <!-- H1 (The Core Question) -->
             <h1 class="hero-h1">
               מתי בפעם האחרונה ישבת מול דילמה קשה בעסק – והיה לך עם מי להתייעץ בלי מסכות?
@@ -494,13 +471,32 @@
     </div>
   </div>
 
-  <!-- Floating Mobile Sticky CTA -->
-  <div class="mobile-sticky-cta" id="mobile-sticky-cta">
-    <a href="#contact-form" class="btn btn-primary btn-sticky-book">
-      <span>לקביעת שיחה ללא עלות</span>
-      <span class="btn-arrow">⬅️</span>
+  <!-- Floating Contact Action Buttons (WhatsApp & Phone) -->
+  <aside class="floating-contact-dock" aria-label="יצירת קשר מהיר">
+    <!-- WhatsApp Floating Button -->
+    <a href="https://wa.me/972525949682?text=%D7%94%D7%99%D7%99%20%D7%92%D7%99%D7%90,%20%D7%94%D7%92%D7%A2%D7%AA%D7%99%20%D7%93%D7%A8%D7%9A%20%D7%94%D7%90%D7%AA%D7%A8%20%D7%95%D7%90%D7%A9%D7%9E%D7%97%20%D7%9C%D7%A9%D7%95%D7%97%D7%97" 
+       class="floating-contact-btn floating-btn-whatsapp" 
+       target="_blank" 
+       rel="noopener noreferrer" 
+       aria-label="שליחת הודעה בווטסאפ לגיא הדס" 
+       title="שליחת הודעה בווטסאפ">
+      <svg class="floating-icon" viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+        <path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0 0 12.04 2zm.01 1.67c2.2 0 4.26.86 5.82 2.42a8.225 8.225 0 0 1 2.41 5.83c0 4.54-3.7 8.24-8.24 8.24-1.48 0-2.93-.4-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.196 8.196 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.24-8.24zm4.52 11.66c-.25-.13-1.47-.72-1.7-.81-.23-.08-.39-.13-.56.13-.17.25-.64.81-.79.97-.14.17-.29.19-.54.06-.25-.13-1.06-.39-2.02-1.25-.75-.67-1.26-1.5-1.4-1.76-.15-.25-.02-.39.11-.51.11-.11.25-.29.38-.44.13-.14.17-.25.25-.42.08-.17.04-.31-.02-.44-.06-.13-.56-1.34-.76-1.84-.2-.48-.4-.42-.56-.43h-.48c-.17 0-.44.06-.67.31-.23.25-.88.86-.88 2.1 0 1.23.9 2.43 1.02 2.6.13.17 1.77 2.7 4.29 3.79.6.26 1.07.41 1.43.53.6.19 1.15.16 1.58.1.48-.07 1.47-.6 1.68-1.18.21-.58.21-1.08.15-1.18-.07-.1-.23-.17-.48-.29z"/>
+      </svg>
+      <span class="floating-btn-text">וואטסאפ</span>
     </a>
-  </div>
+
+    <!-- Phone Floating Button -->
+    <a href="tel:0525949682" 
+       class="floating-contact-btn floating-btn-phone" 
+       aria-label="חיוג טלפוני ישיר לגיא הדס" 
+       title="חיוג ישיר">
+      <svg class="floating-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+      </svg>
+      <span class="floating-btn-text">052-594-9682</span>
+    </a>
+  </aside>
 
   <!-- JavaScript Bundle (Firebase & App Logic) -->
   <script type="module" src="app.js?v=3.2.0"></script>
