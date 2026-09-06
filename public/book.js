@@ -53,15 +53,42 @@ const summaryAttendees = document.getElementById('summary-attendees');
 const googleCalBtn = document.getElementById('google-cal-btn');
 const downloadIcsBtn = document.getElementById('download-ics-btn');
 
-// Default 3 Weekly Slots Template (Day of week: 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 0=Sun)
-// Guy's 3 designated weekly 1-hour slots:
-const DEFAULT_SLOT_TEMPLATES = [
+// Candidate 1-hour slots pool across Israeli working days (Sunday to Thursday, 10:00 - 18:00)
+// Ordered by executive preference
+const CANDIDATE_SLOTS_POOL = [
+  // Primary core preferred slots
   { dayOffset: 1, dayName: 'יום שני', timeStr: '11:00 - 12:00', startHour: 11, startMin: 0, endHour: 12, endMin: 0 },
   { dayOffset: 2, dayName: 'יום שלישי', timeStr: '15:00 - 16:00', startHour: 15, startMin: 0, endHour: 16, endMin: 0 },
-  { dayOffset: 4, dayName: 'יום חמישי', timeStr: '10:00 - 11:00', startHour: 10, startMin: 0, endHour: 11, endMin: 0 }
+  { dayOffset: 4, dayName: 'יום חמישי', timeStr: '10:00 - 11:00', startHour: 10, startMin: 0, endHour: 11, endMin: 0 },
+
+  // Secondary candidate slots across all working days
+  { dayOffset: 0, dayName: 'יום ראשון', timeStr: '11:00 - 12:00', startHour: 11, startMin: 0, endHour: 12, endMin: 0 },
+  { dayOffset: 3, dayName: 'יום רביעי', timeStr: '14:00 - 15:00', startHour: 14, startMin: 0, endHour: 15, endMin: 0 },
+  { dayOffset: 1, dayName: 'יום שני', timeStr: '15:00 - 16:00', startHour: 15, startMin: 0, endHour: 16, endMin: 0 },
+  { dayOffset: 4, dayName: 'יום חמישי', timeStr: '14:00 - 15:00', startHour: 14, startMin: 0, endHour: 15, endMin: 0 },
+  { dayOffset: 0, dayName: 'יום ראשון', timeStr: '15:00 - 16:00', startHour: 15, startMin: 0, endHour: 16, endMin: 0 },
+  { dayOffset: 2, dayName: 'יום שלישי', timeStr: '11:00 - 12:00', startHour: 11, startMin: 0, endHour: 12, endMin: 0 },
+  { dayOffset: 3, dayName: 'יום רביעי', timeStr: '11:00 - 12:00', startHour: 11, startMin: 0, endHour: 12, endMin: 0 },
+  { dayOffset: 4, dayName: 'יום חמישי', timeStr: '11:30 - 12:30', startHour: 11, startMin: 30, endHour: 12, endMin: 30 },
+  { dayOffset: 1, dayName: 'יום שני', timeStr: '10:00 - 11:00', startHour: 10, startMin: 0, endHour: 11, endMin: 0 },
+  { dayOffset: 3, dayName: 'יום רביעי', timeStr: '16:00 - 17:00', startHour: 16, startMin: 0, endHour: 17, endMin: 0 },
+  { dayOffset: 2, dayName: 'יום שלישי', timeStr: '16:30 - 17:30', startHour: 16, startMin: 30, endHour: 17, endMin: 30 },
+  { dayOffset: 0, dayName: 'יום ראשון', timeStr: '16:30 - 17:30', startHour: 16, startMin: 30, endHour: 17, endMin: 30 }
 ];
 
-document.addEventListener('DOMContentLoaded', async () => {
+const HEBREW_MONTHS_NAMES = [
+  'בינואר', 'בפברואר', 'במרץ', 'באפריל', 'במאי', 'ביוני',
+  'ביולי', 'באוגוסט', 'בספטמבר', 'באוקטובר', 'בנובמבר', 'בדצמבר'
+];
+
+const HEBREW_MONTHS_SHORT_NAMES = [
+  'ינו׳', 'פבר׳', 'מרץ', 'אפר׳', 'מאי', 'יוני',
+  'יולי', 'אוג׳', 'ספט׳', 'אוק׳', 'נוב׳', 'דצמ׳'
+];
+
+let bookedIntervals = [];
+
+async function init() {
   // 1. Get Lead ID from URL
   const urlParams = new URLSearchParams(window.location.search);
   currentLeadId = urlParams.get('id') || urlParams.get('leadId');
@@ -89,28 +116,47 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 2. Fetch all booked slots from DB
   await fetchBookedSlots();
 
-  // 3. Generate 3 upcoming available weeks (STRICTLY starting from NEXT week)
+  // 3. Immediately generate 3 upcoming available weeks (guaranteed 3 available slots each)
   generateUpcomingWeeks();
 
-  // 4. Render Week Tabs and Slots
+  // 4. Render initial interface
   renderWeekTabs();
   renderSlotsForCurrentWeek();
-});
+
+  // 5. Connect and sync live availability with Google Calendar (mr.hadas@gmail.com) in background
+  syncGoogleCalendarAvailableSlots();
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
 
 // Fetch already taken slots
 async function fetchBookedSlots() {
   try {
     const querySnapshot = await getDocs(collection(db, "bookings"));
     bookedSlots.clear();
+    bookedIntervals = [];
     querySnapshot.forEach(docSnap => {
       bookedSlots.add(docSnap.id);
+      const data = docSnap.data();
+      if (data.startIso && data.endIso) {
+        bookedIntervals.push({
+          start: new Date(data.startIso).getTime(),
+          end: new Date(data.endIso).getTime(),
+          slotId: docSnap.id
+        });
+      }
     });
   } catch (err) {
     console.warn("Error fetching bookings:", err);
   }
 }
 
-// Generate next 3 upcoming weeks (Starting from Next Sunday)
+// Generate next 3 upcoming weeks (Starting strictly from Next Sunday)
+// ALWAYS finds 3 available slots for each week!
 function generateUpcomingWeeks() {
   weeksData = [];
   const now = new Date();
@@ -123,58 +169,161 @@ function generateUpcomingWeeks() {
   nextSunday.setDate(now.getDate() + daysUntilNextSunday);
   nextSunday.setHours(0, 0, 0, 0);
 
+  const weekLabels = ["השבוע הבא", "עוד שבוע", "עוד שבועיים"];
+
   // Generate 3 consecutive weeks
   for (let w = 0; w < 3; w++) {
     const weekStart = new Date(nextSunday);
     weekStart.setDate(nextSunday.getDate() + (w * 7));
 
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekStart.getDate() + 5); // through Thursday/Friday
+    const weekEndThursday = new Date(weekStart);
+    weekEndThursday.setDate(weekStart.getDate() + 4);
 
-    const weekLabel = w === 0 
-      ? `השבוע הבא (${formatDateShort(weekStart)})`
-      : `עוד ${w + 1} שבועות (${formatDateShort(weekStart)})`;
+    const weekLabel = weekLabels[w];
+    const startDayNum = weekStart.getDate();
+    const endDayNum = weekEndThursday.getDate();
+    const monthIndex = weekEndThursday.getMonth();
+    const dateRangeLabel = `${startDayNum} - ${endDayNum} ${HEBREW_MONTHS_NAMES[monthIndex]}`;
+    const dateRangeShort = `${startDayNum}-${endDayNum} ${HEBREW_MONTHS_SHORT_NAMES[monthIndex]}`;
 
-    // 3 slots for this week
-    const slots = DEFAULT_SLOT_TEMPLATES.map(tmpl => {
+    // Dynamically pick exactly 3 available slots from candidate pool
+    const slots = [];
+    const usedDays = new Set();
+
+    // Pass 1: Try distinct days
+    for (const cand of CANDIDATE_SLOTS_POOL) {
+      if (slots.length >= 3) break;
+      if (usedDays.has(cand.dayOffset)) continue;
+
       const slotDate = new Date(weekStart);
-      slotDate.setDate(weekStart.getDate() + tmpl.dayOffset);
-      
+      slotDate.setDate(weekStart.getDate() + cand.dayOffset);
+
       const startDateTime = new Date(slotDate);
-      startDateTime.setHours(tmpl.startHour, tmpl.startMin, 0, 0);
+      startDateTime.setHours(cand.startHour, cand.startMin, 0, 0);
 
       const endDateTime = new Date(slotDate);
-      endDateTime.setHours(tmpl.endHour, tmpl.endMin, 0, 0);
+      endDateTime.setHours(cand.endHour, cand.endMin, 0, 0);
+
+      const startMs = startDateTime.getTime();
+      const endMs = endDateTime.getTime();
 
       const dateKey = formatDateKey(slotDate);
-      const slotId = `slot_${dateKey}_${String(tmpl.startHour).padStart(2, '0')}${String(tmpl.startMin).padStart(2, '0')}`;
-      const isBooked = bookedSlots.has(slotId);
+      const slotId = `slot_${dateKey}_${String(cand.startHour).padStart(2, '0')}${String(cand.startMin).padStart(2, '0')}`;
+      const slotIdAlt = `slot_${slotDate.getFullYear()}-${String(slotDate.getMonth() + 1).padStart(2, '0')}-${String(slotDate.getDate()).padStart(2, '0')}_${String(cand.startHour).padStart(2, '0')}${String(cand.startMin).padStart(2, '0')}`;
 
-      return {
-        slotId,
-        dayName: tmpl.dayName,
-        dateKey,
-        dateStr: formatDateHebrew(slotDate),
-        timeStr: tmpl.timeStr,
-        startDateTime,
-        endDateTime,
-        isBooked
-      };
-    });
+      const isBooked = bookedSlots.has(slotId) || bookedSlots.has(slotIdAlt) || bookedIntervals.some(b => startMs < b.end && endMs > b.start);
+
+      if (!isBooked) {
+        slots.push({
+          slotId,
+          dayName: cand.dayName,
+          dayOffset: cand.dayOffset,
+          dateKey,
+          dateStr: formatDateHebrew(slotDate),
+          timeStr: cand.timeStr,
+          startDateTime,
+          endDateTime,
+          startIso: startDateTime.toISOString(),
+          endIso: endDateTime.toISOString(),
+          isBooked: false
+        });
+        usedDays.add(cand.dayOffset);
+      }
+    }
+
+    // Pass 2: If we still need slots to reach 3, allow a second slot on the same day
+    if (slots.length < 3) {
+      for (const cand of CANDIDATE_SLOTS_POOL) {
+        if (slots.length >= 3) break;
+
+        const slotDate = new Date(weekStart);
+        slotDate.setDate(weekStart.getDate() + cand.dayOffset);
+
+        const startDateTime = new Date(slotDate);
+        startDateTime.setHours(cand.startHour, cand.startMin, 0, 0);
+
+        const endDateTime = new Date(slotDate);
+        endDateTime.setHours(cand.endHour, cand.endMin, 0, 0);
+
+        const startMs = startDateTime.getTime();
+        const endMs = endDateTime.getTime();
+
+        const dateKey = formatDateKey(slotDate);
+        const slotId = `slot_${dateKey}_${String(cand.startHour).padStart(2, '0')}${String(cand.startMin).padStart(2, '0')}`;
+        const slotIdAlt = `slot_${slotDate.getFullYear()}-${String(slotDate.getMonth() + 1).padStart(2, '0')}-${String(slotDate.getDate()).padStart(2, '0')}_${String(cand.startHour).padStart(2, '0')}${String(cand.startMin).padStart(2, '0')}`;
+
+        const isBooked = bookedSlots.has(slotId) || bookedSlots.has(slotIdAlt) || bookedIntervals.some(b => startMs < b.end && endMs > b.start);
+        const alreadyAdded = slots.some(s => s.startDateTime.getTime() === startMs);
+
+        if (!isBooked && !alreadyAdded) {
+          slots.push({
+            slotId,
+            dayName: cand.dayName,
+            dayOffset: cand.dayOffset,
+            dateKey,
+            dateStr: formatDateHebrew(slotDate),
+            timeStr: cand.timeStr,
+            startDateTime,
+            endDateTime,
+            startIso: startDateTime.toISOString(),
+            endIso: endDateTime.toISOString(),
+            isBooked: false
+          });
+        }
+      }
+    }
+
+    // Sort chronologically
+    slots.sort((a, b) => a.startDateTime - b.startDateTime);
 
     weeksData.push({
       weekIndex: w,
       weekLabel,
+      dateRangeLabel,
+      dateRangeShort,
       slots
     });
+  }
+}
+
+// Sync live availability from Google Calendar API Cloud Function
+async function syncGoogleCalendarAvailableSlots() {
+  try {
+    const apiUrl = "https://us-central1-guyhadas-e38c4.cloudfunctions.net/getAvailableSlots";
+    const res = await fetch(apiUrl, { method: "GET" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+
+    if (data.success && Array.isArray(data.weeks) && data.weeks.length > 0) {
+      weeksData = data.weeks.map(w => ({
+        weekIndex: w.weekIndex,
+        weekLabel: w.weekLabel,
+        dateRangeLabel: w.dateRangeLabel,
+        dateRangeShort: w.dateRangeShort,
+        slots: w.slots.map(s => ({
+          ...s,
+          startDateTime: new Date(s.startIso),
+          endDateTime: new Date(s.endIso),
+          isBooked: false
+        }))
+      }));
+
+      // Re-render tabs and current week slots with verified Google Calendar availability
+      renderWeekTabs();
+      renderSlotsForCurrentWeek();
+      console.log("Verified slots synced directly with Google Calendar (mr.hadas@gmail.com)");
+    }
+  } catch (err) {
+    console.warn("Using offline/Firestore slot availability fallback:", err.message);
   }
 }
 
 function renderWeekTabs() {
   weekTabsContainer.innerHTML = weeksData.map((week, idx) => {
     return `
-      <button class="week-tab-btn ${idx === selectedWeekIndex ? 'active' : ''}" data-idx="${idx}">
-        ${escapeHtml(week.weekLabel)}
+      <button class="week-tab-btn ${idx === selectedWeekIndex ? 'active' : ''}" data-idx="${idx}" type="button">
+        <span class="tab-title">${escapeHtml(week.weekLabel)}</span>
+        <span class="tab-dates">${escapeHtml(week.dateRangeShort || '')}</span>
       </button>
     `;
   }).join('');
@@ -204,16 +353,29 @@ function renderSlotsForCurrentWeek() {
 
   slotsGrid.innerHTML = currentWeek.slots.map(slot => {
     return `
-      <div class="slot-card ${slot.isBooked ? 'booked' : 'available'}" data-slot-id="${slot.slotId}">
-        <h3 class="slot-day-name">${escapeHtml(slot.dayName)}</h3>
-        <span class="slot-date-str">${escapeHtml(slot.dateStr)}</span>
-        <div class="slot-time-badge">${escapeHtml(slot.timeStr)}</div>
-        <span class="slot-duration">משך: 60 דקות (ללא עלות)</span>
+      <div class="slot-card available" data-slot-id="${slot.slotId}">
+        <div class="slot-card-header">
+          <div class="slot-day-meta">
+            <h3 class="slot-day-name">${escapeHtml(slot.dayName)}</h3>
+            <span class="slot-date-str">${escapeHtml(slot.dateStr)}</span>
+          </div>
+          <span class="open-badge">פנוי לשיבוץ</span>
+        </div>
 
-        ${slot.isBooked 
-          ? `<span class="booked-label">🔒 נתפס</span>`
-          : `<button class="btn btn-primary btn-slot-select book-slot-action-btn" data-slot-id="${slot.slotId}">בחר מועד זה</button>`
-        }
+        <div class="slot-time-badge">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+          <span>${escapeHtml(slot.timeStr)}</span>
+        </div>
+
+        <span class="slot-duration">משך השיחה: 60 דקות (ללא עלות)</span>
+
+        <button class="btn btn-primary btn-slot-select book-slot-action-btn" data-slot-id="${slot.slotId}">
+          <span>בחר מועד זה</span>
+          <span style="font-size: 1.1em;">⬅️</span>
+        </button>
       </div>
     `;
   }).join('');
