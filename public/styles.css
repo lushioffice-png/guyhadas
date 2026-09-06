@@ -181,6 +181,14 @@ h1, h2, h3, h4 {
   font-weight: 900;
   color: var(--color-slate-900);
   letter-spacing: -0.4px;
+  line-height: 1.15;
+}
+
+.brand-sub {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-slate-500);
+  font-family: var(--font-secondary);
 }
 
 .header-actions {
@@ -201,6 +209,20 @@ h1, h2, h3, h4 {
   transition: all var(--transition-fast);
   text-decoration: none;
   cursor: pointer;
+}
+
+.header-book-btn {
+  background-color: var(--color-slate-900);
+  color: var(--color-white);
+  border: 1px solid var(--color-slate-900);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.1);
+}
+
+.header-book-btn:hover {
+  background-color: var(--color-slate-800);
+  color: var(--color-white);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
 }
 
 /* WhatsApp Button */
@@ -904,6 +926,54 @@ h1, h2, h3, h4 {
   margin-top: 14px;
 }
 
+/* In-Page Jump to Booking CTAs */
+#contact-form {
+  scroll-margin-top: 80px;
+}
+
+.section-cta-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin-top: 40px;
+  text-align: center;
+  gap: 8px;
+}
+
+.section-cta-wrap .btn {
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
+  padding: 14px 32px;
+  font-size: 1.06rem;
+  font-weight: 800;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.section-cta-wrap .btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.2);
+}
+
+.btn-arrow {
+  display: inline-block;
+  transition: transform var(--transition-fast);
+}
+
+.btn:hover .btn-arrow {
+  transform: translateX(-4px);
+}
+
+.cta-micro-note {
+  font-size: 0.84rem;
+  color: var(--color-slate-500);
+}
+
+/* Mobile Sticky Bottom Floating CTA */
+.mobile-sticky-cta {
+  display: none;
+}
+
 /* ==========================================================================
    10. FOOTER
    ========================================================================== */
@@ -1142,7 +1212,52 @@ h1, h2, h3, h4 {
   }
 
   .brand-name {
-    font-size: 1.25rem;
+    font-size: 1.15rem;
+  }
+
+  .brand-sub {
+    font-size: 0.72rem;
+  }
+
+  .header-book-btn {
+    display: none;
+  }
+
+  .mobile-sticky-cta {
+    display: block;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-top: 1px solid var(--color-slate-200);
+    padding: 10px 16px;
+    z-index: 990;
+    box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.08);
+    transition: transform 0.3s ease, opacity 0.3s ease;
+  }
+
+  .mobile-sticky-cta.hidden-form {
+    transform: translateY(100%);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .mobile-sticky-cta .btn-sticky-book {
+    width: 100%;
+    padding: 13px 20px;
+    font-size: 1.02rem;
+    font-weight: 800;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background-color: var(--color-slate-900);
+    color: var(--color-white);
+    border-radius: var(--radius-sm);
   }
 
   .header-actions {

@@ -35,11 +35,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 2. Sticky Header Scroll Effect
   const header = document.getElementById('site-header');
+  const mobileStickyCta = document.getElementById('mobile-sticky-cta');
+  const contactSection = document.getElementById('contact-form');
+
   window.addEventListener('scroll', () => {
-    if (window.scrollY > 40) {
+    const scrollY = window.scrollY;
+    if (scrollY > 40) {
       header.classList.add('scrolled');
     } else {
       header.classList.remove('scrolled');
+    }
+
+    if (mobileStickyCta && contactSection) {
+      const contactRect = contactSection.getBoundingClientRect();
+      const isContactInView = contactRect.top < window.innerHeight && contactRect.bottom > 100;
+
+      if (scrollY > 380 && !isContactInView) {
+        mobileStickyCta.classList.remove('hidden-form');
+      } else {
+        mobileStickyCta.classList.add('hidden-form');
+      }
     }
   });
 
