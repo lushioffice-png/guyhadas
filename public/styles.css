@@ -140,8 +140,9 @@ h1, h2, h3, h4 {
 }
 
 /* Client-Centric Clean Emphasis */
-.highlight-you {
-  color: var(--color-slate-900);
+.highlight-you,
+.highlight-focus {
+  color: var(--color-slate-950);
   font-weight: 800;
 }
 
