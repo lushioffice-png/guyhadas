@@ -315,4 +315,10 @@ document.addEventListener('DOMContentLoaded', () => {
       console.warn("Could not send direct email:", err);
     }
   }
+
+  // Handle local dev fallback for /admin link
+  const adminLink = document.getElementById('footer-admin-btn');
+  if (adminLink && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    adminLink.href = '/admin.html';
+  }
 });

@@ -1176,6 +1176,28 @@ h1, h2, h3, h4 {
   margin-top: 2px;
 }
 
+.footer-admin-link {
+  color: var(--color-slate-400);
+  text-decoration: none;
+  font-size: 0.78rem;
+  opacity: 0.75;
+  transition: all var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.footer-admin-link:hover {
+  color: #34D399;
+  opacity: 1;
+  text-decoration: underline;
+}
+
+.footer-sep {
+  margin: 0 8px;
+  color: var(--color-slate-600);
+}
+
 /* ==========================================================================
    MODAL DIALOG
    ========================================================================== */
