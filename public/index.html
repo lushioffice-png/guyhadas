@@ -16,7 +16,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700&family=Heebo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   
   <!-- Main Stylesheet (Cache-Busted) -->
-  <link rel="stylesheet" href="styles.css?v=3.1.0">
+  <link rel="stylesheet" href="styles.css?v=3.5.0">
 </head>
 <body>
 
@@ -42,37 +42,23 @@
               מתי בפעם האחרונה ישבת מול דילמה קשה בעסק – והיה לך עם מי להתייעץ בלי מסכות?
             </h1>
 
-            <!-- Subtitle -->
+            <!-- Subtitle with strong client emphasis on 'אתה' -->
             <p class="hero-subtext">
-              שירות ניהול מעטפת וביצוע למנכ"לים ובעלי עסקים (Hands-on Ops): לוקח ממך את הטיפול במספרים, בתמחור, בחוזים ובייעול תהליכים בעזרת כלי AI – ונותן לך גב שקט ושותף חשיבה בגובה העיניים, כדי שתוכל לחזור למומחיות שהקימה את העסק.
+              שירות ניהול מעטפת וביצוע למנכ"לים ובעלי עסקים (Hands-on Ops): <strong class="highlight-you">אתה</strong> בוחר איפה לשחרר את העומס – במספרים, בתמחור, בחוזים או בייעול תהליכים וכלי AI. אני כאן כגב שקט ושותף חשיבה בגובה העיניים, כדי ש<strong class="highlight-you">אתה</strong> תוכל לחזור להתמקד במומחיות ובערך שרק <strong class="highlight-you">אתה</strong> מביא לעסק.
             </p>
 
-            <!-- CTA & Micro-copy -->
+            <!-- CTA -->
             <div class="hero-cta-box">
               <a href="#contact-form" class="btn btn-primary btn-lg" id="hero-cta-btn">
-                <span>לתיאום שיחה ופריקת עומס (שעה ללא עלות)</span>
+                <span>לתיאום שיחה</span>
               </a>
-              <p class="hero-micro-note">
-                שיחה אישית ודיסקרטית תחת NDA. ללא שום התחייבות.
-              </p>
             </div>
           </div>
 
-          <!-- Left Col: Executive Portrait Card -->
+          <!-- Left Col: Executive Portrait (Clean Photo) -->
           <div class="hero-visual">
-            <div class="executive-portrait-card">
-              <div class="portrait-img-frame">
-                <img src="/assets/guy-hadas.jpg" alt="גיא הדס - שותף חשיבה וביצוע למנכ״לים" class="executive-portrait-img" loading="eager">
-              </div>
-              <div class="portrait-details">
-                <strong class="portrait-name">גיא הדס</strong>
-                <span class="portrait-title">ייעול תהליכים ואופרציה עסקית</span>
-                <div class="portrait-pill-row">
-                  <span class="portrait-pill pill-emerald">£40M+ עסקאות בלונדון</span>
-                  <span class="portrait-pill pill-blue">Premier League &amp; JP Morgan</span>
-                  <span class="portrait-pill pill-slate">100% דיסקרטיות תחת NDA</span>
-                </div>
-              </div>
+            <div class="executive-portrait-frame">
+              <img src="/assets/guy-hadas.jpg" alt="גיא הדס" class="executive-portrait-img" loading="eager">
             </div>
           </div>
 
@@ -93,8 +79,10 @@
         <div class="cards-grid-3">
           <!-- Card 1 -->
           <div class="clean-card">
-            <div class="card-icon">👤</div>
-            <h3 class="card-title">הבדידות והמשא השקט</h3>
+            <div class="card-header">
+              <div class="card-icon-badge">👤</div>
+              <h3 class="card-title">הבדידות והמשא השקט</h3>
+            </div>
             <p class="card-body">
               אי אפשר להלחיץ עובדים (כדי לשמור על יציבות), לא נכון להעמיס את כל החרדות על הבית, וקשה לפתוח סימני שאלה מול שותפים. הכל נשאר אצלך בבטן.
             </p>
@@ -102,8 +90,10 @@
 
           <!-- Card 2 -->
           <div class="clean-card">
-            <div class="card-icon">🛡️</div>
-            <h3 class="card-title">מחסום האגו והחשש להודות ב"אני לא יודע"</h3>
+            <div class="card-header">
+              <div class="card-icon-badge">🛡️</div>
+              <h3 class="card-title">מחסום האגו והחשש להודות ב"אני לא יודע"</h3>
+            </div>
             <p class="card-body">
               מצפים ממך לשלוט בהכל – מדוחות ותמחור ועד טכנולוגיה ומערכות. לא נעים להודות מול קולגות בחוסר הבנה. צריך מקום בטוח שבו לגיטימי לפרוק בלי שיפוטיות.
             </p>
@@ -111,8 +101,10 @@
 
           <!-- Card 3 -->
           <div class="clean-card">
-            <div class="card-icon">⏳</div>
-            <h3 class="card-title">השחיקה במעטפת במקום בליבה</h3>
+            <div class="card-header">
+              <div class="card-icon-badge">⏳</div>
+              <h3 class="card-title">השחיקה במעטפת במקום בליבה</h3>
+            </div>
             <p class="card-body">
               במקום ליצור, למכור ולהוביל קדימה, הזמן נשרף על תמחורים, גבייה, ספקים, בירוקרטיה, חוזים וסנכרון שוחק מול רואי חשבון ועורכי דין.
             </p>
@@ -131,63 +123,124 @@
           </p>
         </div>
 
-        <div class="comparison-grid">
-          <!-- Right Column: The What -->
-          <div class="comparison-card client-side">
-            <div class="col-badge">המומחיות שלך</div>
-            <h3 class="comparison-title">ליבת המקצוע</h3>
-            <ul class="comparison-list">
-              <li>
-                <span class="check-mark">✓</span>
-                <span>מומחיות מקצועית מובילה בתחום</span>
-              </li>
-              <li>
-                <span class="check-mark">✓</span>
-                <span>קשר עמוק והבנת צורכי הלקוחות</span>
-              </li>
-              <li>
-                <span class="check-mark">✓</span>
-                <span>בקרת איכות של התוצר הסופי</span>
-              </li>
-              <li>
-                <span class="check-mark">✓</span>
-                <span>החזון והכיוון של העסק</span>
-              </li>
-            </ul>
+        <div class="exec-matrix">
+          <div class="exec-matrix-grid">
+            <!-- Right Column: The Client's Domain -->
+            <div class="exec-col client-col">
+              <div class="exec-col-header">
+                <span class="exec-tag">המומחיות שלך</span>
+                <h3 class="exec-col-title">ליבת המקצוע והחזון</h3>
+                <p class="exec-col-sub">הידע, הלקוחות והערך הייחודי שרק אתה מוביל בעסק</p>
+              </div>
+              <div class="exec-list">
+                <div class="exec-item">
+                  <div class="exec-icon client">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                  </div>
+                  <div class="exec-item-content">
+                    <div class="exec-item-title">מובילות מקצועית בענף</div>
+                    <div class="exec-item-desc">מומחיות מקצועית מובילה, ידע מעמיק ופתרונות מורכבים</div>
+                  </div>
+                </div>
+
+                <div class="exec-item">
+                  <div class="exec-icon client">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                  </div>
+                  <div class="exec-item-content">
+                    <div class="exec-item-title">קשר והבנת צורכי הלקוחות</div>
+                    <div class="exec-item-desc">בניית אמון אישי, הבנה עמוקה ושימור לקוחות מפתח</div>
+                  </div>
+                </div>
+
+                <div class="exec-item">
+                  <div class="exec-icon client">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+                  </div>
+                  <div class="exec-item-content">
+                    <div class="exec-item-title">בקרת איכות של התוצר הסופי</div>
+                    <div class="exec-item-desc">שמירה קפדנית על סטנדרט המצוינות המזוהה עם שמך</div>
+                  </div>
+                </div>
+
+                <div class="exec-item">
+                  <div class="exec-icon client">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>
+                  </div>
+                  <div class="exec-item-content">
+                    <div class="exec-item-title">החזון והכיוון של העסק</div>
+                    <div class="exec-item-desc">הגדרת היעדים, המטרות האסטרטגיות וקצב הצמיחה</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Left Column: Guy Hadas / The Operational Engine -->
+            <div class="exec-col advisor-col">
+              <div class="exec-col-header">
+                <span class="exec-tag highlight">המעטפת שלי</span>
+                <h3 class="exec-col-title">הוצאה לפועל ותפעול</h3>
+                <p class="exec-col-sub">המנוע השקט שמחזיק את האופרציה ומפנה אותך מניהול שוחק</p>
+              </div>
+              <div class="exec-list">
+                <div class="exec-item">
+                  <div class="exec-icon advisor">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+                  </div>
+                  <div class="exec-item-content">
+                    <div class="exec-item-title">סדר פיננסי ומודלי רווחיות</div>
+                    <div class="exec-item-desc">תמחור מדויק, ניתוח רווחיות ושליטה מלאה בתזרים</div>
+                  </div>
+                </div>
+
+                <div class="exec-item">
+                  <div class="exec-icon advisor">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                  </div>
+                  <div class="exec-item-content">
+                    <div class="exec-item-title">שיפור תהליכים ואוטומציות AI</div>
+                    <div class="exec-item-desc">הטמעת כלי בינה מלאכותית ואוטומציות שחוסכות ימי עבודה</div>
+                  </div>
+                </div>
+
+                <div class="exec-item">
+                  <div class="exec-icon advisor">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  </div>
+                  <div class="exec-item-content">
+                    <div class="exec-item-title">הוצאה לפועל של משימות תקועות</div>
+                    <div class="exec-item-desc">שחרור צווארי בקבוק ועמידה קשיחה בלוחות זמנים</div>
+                  </div>
+                </div>
+
+                <div class="exec-item">
+                  <div class="exec-icon advisor">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><rect x="9" y="11" width="6" height="4" rx="1"/></svg>
+                  </div>
+                  <div class="exec-item-content">
+                    <div class="exec-item-title">שותף חשיבה שקט ודיסקרטי</div>
+                    <div class="exec-item-desc">ליווי בצמתי קבלת החלטות, בדילמות ניהוליות ותחת NDA מלא</div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <!-- Left Column: The How -->
-          <div class="comparison-card advisor-side">
-            <div class="col-badge highlight">המעטפת שלי</div>
-            <h3 class="comparison-title">הוצאה לפועל ותפעול</h3>
-            <ul class="comparison-list">
-              <li>
-                <span class="check-mark accent">✓</span>
-                <span>סדר פיננסי, מודלי רווחיות ותמחור מדויק</span>
-              </li>
-              <li>
-                <span class="check-mark accent">✓</span>
-                <span>שיפור תהליכים ואוטומציות באמצעות כלי AI</span>
-              </li>
-              <li>
-                <span class="check-mark accent">✓</span>
-                <span>הוצאה לפועל של משימות תקועות בלוחות זמנים</span>
-              </li>
-              <li>
-                <span class="check-mark accent">✓</span>
-                <span>שותף חשיבה שקט ודיסקרטי לקבלת החלטות</span>
-              </li>
-            </ul>
+          <!-- Bottom Executive Result Banner -->
+          <div class="exec-matrix-footer">
+            <div class="exec-footer-badge">הסינרגיה בפועל</div>
+            <div class="exec-footer-text">
+              אתה מתרכז ב-100% במה שאתה הכי טוב בו, בזמן שהאופרציה והכספים מנוהלים בשקט ובמקצועיות ללא שחיקה.
+            </div>
           </div>
         </div>
 
         <!-- In-Page Jump to Booking CTA: Synergy -->
         <div class="section-cta-wrap">
           <a href="#contact-form" class="btn btn-primary btn-lg">
-            <span>בוא נבדוק איך זה עובד בעסק שלך – לקביעת שיחה</span>
-            <span class="btn-arrow">⬅️</span>
+            <span>בוא נדבר</span>
+            <span class="btn-arrow">←</span>
           </a>
-          <p class="cta-micro-note">שיחת אבחון בת שעה ללא עלות • 100% דיסקרטיות תחת NDA</p>
         </div>
       </div>
     </section>
@@ -277,10 +330,9 @@
         <!-- In-Page Jump to Booking CTA: Proof -->
         <div class="section-cta-wrap">
           <a href="#contact-form" class="btn btn-primary btn-lg">
-            <span>בוא נשב על המספרים והאתגרים שלך (שעה ללא עלות)</span>
-            <span class="btn-arrow">⬅️</span>
+            <span>לתיאום שיחה</span>
+            <span class="btn-arrow">←</span>
           </a>
-          <p class="cta-micro-note">שיחה ממוקדת בגובה העיניים • ללא שום התחייבות</p>
         </div>
       </div>
     </section>
@@ -329,51 +381,58 @@
     </section>
 
     <!-- 8. SECTION 7: 4 צעדים פשוטים לתחילת עבודה -->
-    <section class="section" id="steps">
+    <section class="section section-steps" id="steps">
       <div class="container">
-        <div class="section-header">
+        <div class="section-header section-header-tight">
           <h2 class="section-h2">4 צעדים פשוטים לתחילת עבודה</h2>
         </div>
 
-        <div class="steps-row">
-          <div class="step-box">
-            <div class="step-num">1</div>
-            <h3 class="step-title">שאלון היכרות קצר</h3>
-            <p class="step-desc">3 דקות למיפוי צווארי בקבוק עיקריים</p>
-          </div>
+        <div class="fluid-steps-container">
+          <div class="fluid-steps-grid">
+            <!-- צעד 1 -->
+            <div class="fluid-step-card">
+              <div class="fluid-step-top">
+                <span class="fluid-step-pill">01</span>
+              </div>
+              <h3 class="fluid-step-title">שאלון היכרות קצר</h3>
+              <p class="fluid-step-desc">3 דקות למיפוי צווארי בקבוק עיקריים</p>
+            </div>
 
-          <div class="step-divider">←</div>
+            <!-- צעד 2 -->
+            <div class="fluid-step-card">
+              <div class="fluid-step-top">
+                <span class="fluid-step-pill">02</span>
+              </div>
+              <h3 class="fluid-step-title">הסכם סודיות</h3>
+              <p class="fluid-step-desc">חתימה על הסכם סודיות מלא (NDA)</p>
+            </div>
 
-          <div class="step-box">
-            <div class="step-num">2</div>
-            <h3 class="step-title">הסכם סודיות</h3>
-            <p class="step-desc">חתימה על הסכם סודיות מלא (NDA)</p>
-          </div>
+            <!-- צעד 3 -->
+            <div class="fluid-step-card">
+              <div class="fluid-step-top">
+                <span class="fluid-step-pill">03</span>
+              </div>
+              <h3 class="fluid-step-title">שיחת היכרות אישית</h3>
+              <p class="fluid-step-desc">שעה ללא עלות וללא שום התחייבות</p>
+            </div>
 
-          <div class="step-divider">←</div>
-
-          <div class="step-box">
-            <div class="step-num">3</div>
-            <h3 class="step-title">שיחת היכרות אישית</h3>
-            <p class="step-desc">שעה ללא עלות וללא שום התחייבות</p>
-          </div>
-
-          <div class="step-divider">←</div>
-
-          <div class="step-box">
-            <div class="step-num">4</div>
-            <h3 class="step-title">בחירת מסלול עבודה</h3>
-            <p class="step-desc">התאמה מדויקת לקצב ולתקציב שלך</p>
+            <!-- צעד 4 -->
+            <div class="fluid-step-card">
+              <div class="fluid-step-top">
+                <span class="fluid-step-pill">04</span>
+              </div>
+              <h3 class="fluid-step-title">בחירת מסלול עבודה</h3>
+              <p class="fluid-step-desc">התאמה מדויקת לקצב ולתקציב שלך</p>
+            </div>
           </div>
         </div>
 
         <!-- In-Page Jump to Booking CTA: Steps -->
         <div class="section-cta-wrap">
           <a href="#contact-form" class="btn btn-primary btn-lg">
-            <span>הצעד הראשון מתחיל כאן – לקביעת שיחה</span>
-            <span class="btn-arrow">⬅️</span>
+            <span>בוא נתחיל</span>
+            <span class="btn-arrow">←</span>
           </a>
-          <p class="cta-micro-note">שעה ממוקדת של הקשבה ומיפוי פתרונות • ללא מכירה וללא התחייבות</p>
         </div>
       </div>
     </section>
@@ -385,8 +444,14 @@
           <div class="form-header">
             <h2 class="form-title">בוא נוריד את העומס מהשולחן</h2>
             <p class="form-subtext">
-              השיחה הראשונה היא שעה של הקשבה נטו – ללא עלות, ללא מכירה וללא התחייבות. שים את הדברים על השולחן ותקבל שיקוף מקצועי כבר מהמפגש הראשון.
+              השיחה הראשונה היא שעה של הקשבה נטו – ללא עלות, ללא מכירה וללא שום התחייבות.
             </p>
+            <div class="form-lead-notice">
+              <span class="lead-notice-icon">🗓️</span>
+              <span class="lead-notice-text">
+                <strong>מיד לאחר ההרשמה:</strong> יופיע קישור ישיר ליומן לקביעת מועד לפגישה, לצד שאלון קצר וממוקד (3 דק') שיעזור לנו להגיע מוכנים ומדויקים לשיחה.
+              </span>
+            </div>
           </div>
 
           <form id="consultation-form" class="consultation-form" novalidate>
@@ -418,15 +483,9 @@
               <span class="field-error" id="business-error">נא להזין את תחום העסק או שם החברה</span>
             </div>
 
-            <!-- Challenge / Dilemma -->
-            <div class="form-group">
-              <label for="main-challenge" class="form-label">מה האתגר או הדילמה העיקרית שמטרידה אותך כרגע?</label>
-              <textarea id="main-challenge" name="challenge" class="form-textarea" rows="4" placeholder="תאר בקצרה את הדילמה, העומס התפעולי או הצורך במיקוד..."></textarea>
-            </div>
-
             <!-- Submit Button -->
             <button type="submit" class="btn btn-primary btn-full" id="submit-form-btn">
-              <span>תיאום שיחה (ללא עלות)</span>
+              <span>לתיאום שיחה</span>
             </button>
 
             <!-- Privacy Note -->
@@ -467,7 +526,7 @@
         <p id="modal-email-notice">שלחתי אליך כעת אימייל עם טופס קצר למענה וקביעת שיחה ביומן שלי.</p>
         <p style="font-size: 0.85rem; color: #64748B; margin-top: 6px;">באפשרותך גם להמשיך ישירות למילוי הטופס כעת:</p>
       </div>
-      <button class="btn btn-primary btn-full" id="modal-confirm-btn">מעבר למילוי הטופס ושיבוץ ביומן ⬅️</button>
+      <button class="btn btn-primary btn-full" id="modal-confirm-btn">המשך ליומן ולשאלון ⬅️</button>
     </div>
   </div>
 

@@ -137,7 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
         phone: phoneInput.value.trim(),
         email: emailInput.value.trim(),
         business: businessInput.value.trim(),
-        challenge: challengeInput.value.trim() || 'לא צוין',
+        challenge: challengeInput ? (challengeInput.value.trim() || 'לא צוין') : 'טופס ראשוני (ימולא בשאלון המורחב)',
         createdAt: serverTimestamp(),
         clientDate: new Date().toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' }),
         source: 'Executive Landing Page',
