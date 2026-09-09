@@ -86,6 +86,73 @@ const HEBREW_MONTHS_SHORT_NAMES = [
   'יולי', 'אוג׳', 'ספט׳', 'אוק׳', 'נוב׳', 'דצמ׳'
 ];
 
+// --- JEWISH HOLIDAYS & EREV CHAG CALENDAR (2025 - 2028) ---
+// All major Jewish holidays, Erev Chag, Chol HaMoed, and National Days are completely blocked from booking
+const JEWISH_HOLIDAYS = {
+  // 2025
+  "2025-03-13": "ערב פורים", "2025-03-14": "פורים", "2025-03-15": "שושן פורים",
+  "2025-04-12": "ערב פסח", "2025-04-13": "פסח א׳", "2025-04-14": "חוה״מ פסח",
+  "2025-04-15": "חוה״מ פסח", "2025-04-16": "חוה״מ פסח", "2025-04-17": "חוה״מ פסח",
+  "2025-04-18": "חוה״מ פסח", "2025-04-19": "שביעי של פסח", "2025-04-30": "יום הזכרון",
+  "2025-05-01": "יום העצמאות", "2025-06-01": "ערב שבועות", "2025-06-02": "חג שבועות",
+  "2025-08-02": "ערב תשעה באב", "2025-08-03": "צום תשעה באב", "2025-09-22": "ערב ראש השנה",
+  "2025-09-23": "ראש השנה א׳", "2025-09-24": "ראש השנה ב׳", "2025-09-25": "צום גדליה",
+  "2025-10-01": "ערב יום כיפור", "2025-10-02": "יום כיפור", "2025-10-06": "ערב סוכות",
+  "2025-10-07": "סוכות א׳", "2025-10-08": "חוה״מ סוכות", "2025-10-09": "חוה״מ סוכות",
+  "2025-10-10": "חוה״מ סוכות", "2025-10-11": "חוה״מ סוכות", "2025-10-12": "חוה״מ סוכות",
+  "2025-10-13": "הושענא רבה", "2025-10-14": "שמחת תורה",
+
+  // 2026
+  "2026-03-02": "ערב פורים", "2026-03-03": "פורים", "2026-03-04": "שושן פורים",
+  "2026-04-01": "ערב פסח", "2026-04-02": "פסח א׳", "2026-04-03": "חוה״מ פסח",
+  "2026-04-04": "חוה״מ פסח", "2026-04-05": "חוה״מ פסח", "2026-04-06": "חוה״מ פסח",
+  "2026-04-07": "חוה״מ פסח", "2026-04-08": "שביעי של פסח", "2026-04-21": "יום הזכרון",
+  "2026-04-22": "יום העצמאות", "2026-05-21": "ערב שבועות", "2026-05-22": "חג שבועות",
+  "2026-07-22": "ערב תשעה באב", "2026-07-23": "צום תשעה באב", "2026-09-11": "ערב ראש השנה",
+  "2026-09-12": "ראש השנה א׳", "2026-09-13": "ראש השנה ב׳", "2026-09-14": "צום גדליה",
+  "2026-09-20": "ערב יום כיפור", "2026-09-21": "יום כיפור", "2026-09-25": "ערב סוכות",
+  "2026-09-26": "סוכות א׳", "2026-09-27": "חוה״מ סוכות", "2026-09-28": "חוה״מ סוכות",
+  "2026-09-29": "חוה״מ סוכות", "2026-09-30": "חוה״מ סוכות", "2026-10-01": "חוה״מ סוכות",
+  "2026-10-02": "הושענא רבה", "2026-10-03": "שמחת תורה",
+
+  // 2027
+  "2027-03-22": "ערב פורים", "2027-03-23": "פורים", "2027-03-24": "שושן פורים",
+  "2027-04-21": "ערב פסח", "2027-04-22": "פסח א׳", "2027-04-23": "חוה״מ פסח",
+  "2027-04-24": "חוה״מ פסח", "2027-04-25": "חוה״מ פסח", "2027-04-26": "חוה״מ פסח",
+  "2027-04-27": "חוה״מ פסח", "2027-04-28": "שביעי של פסח", "2027-05-11": "יום הזכרון",
+  "2027-05-12": "יום העצמאות", "2027-06-10": "ערב שבועות", "2027-06-11": "חג שבועות",
+  "2027-08-11": "ערב תשעה באב", "2027-08-12": "צום תשעה באב", "2027-10-01": "ערב ראש השנה",
+  "2027-10-02": "ראש השנה א׳", "2027-10-03": "ראש השנה ב׳", "2027-10-04": "צום גדליה",
+  "2027-10-10": "ערב יום כיפור", "2027-10-11": "יום כיפור", "2027-10-15": "ערב סוכות",
+  "2027-10-16": "סוכות א׳", "2027-10-17": "חוה״מ סוכות", "2027-10-18": "חוה״מ סוכות",
+  "2027-10-19": "חוה״מ סוכות", "2027-10-20": "חוה״מ סוכות", "2027-10-21": "חוה״מ סוכות",
+  "2027-10-22": "הושענא רבה", "2027-10-23": "שמחת תורה",
+
+  // 2028
+  "2028-03-11": "ערב פורים", "2028-03-12": "פורים", "2028-03-13": "שושן פורים",
+  "2028-04-10": "ערב פסח", "2028-04-11": "פסח א׳", "2028-04-12": "חוה״מ פסח",
+  "2028-04-13": "חוה״מ פסח", "2028-04-14": "חוה״מ פסח", "2028-04-15": "חוה״מ פסח",
+  "2028-04-16": "חוה״מ פסח", "2028-04-17": "שביעי של פסח", "2028-05-01": "יום הזכרון",
+  "2028-05-02": "יום העצמאות", "2028-05-30": "ערב שבועות", "2028-05-31": "חג שבועות",
+  "2028-07-31": "ערב תשעה באב", "2028-08-01": "צום תשעה באב", "2028-09-20": "ערב ראש השנה",
+  "2028-09-21": "ראש השנה א׳", "2028-09-22": "ראש השנה ב׳", "2028-09-29": "ערב יום כיפור",
+  "2028-09-30": "יום כיפור", "2028-10-04": "ערב סוכות", "2028-10-05": "סוכות א׳",
+  "2028-10-06": "חוה״מ סוכות", "2028-10-07": "חוה״מ סוכות", "2028-10-08": "חוה״מ סוכות",
+  "2028-10-09": "חוה״מ סוכות", "2028-10-10": "חוה״מ סוכות", "2028-10-11": "הושענא רבה",
+  "2028-10-12": "שמחת תורה"
+};
+
+function getISODateKey(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function getJewishHolidayName(d) {
+  return JEWISH_HOLIDAYS[getISODateKey(d)] || null;
+}
+
 let bookedIntervals = [];
 
 async function init() {
@@ -116,7 +183,7 @@ async function init() {
   // 2. Fetch all booked slots from DB
   await fetchBookedSlots();
 
-  // 3. Immediately generate 3 upcoming available weeks (guaranteed 3 available slots each)
+  // 3. Immediately generate 3 upcoming available weeks (guaranteed 3 available slots each, holidays excluded)
   generateUpcomingWeeks();
 
   // 4. Render initial interface
@@ -155,8 +222,8 @@ async function fetchBookedSlots() {
   }
 }
 
-// Generate next 3 upcoming weeks (Starting strictly from Next Sunday)
-// ALWAYS finds 3 available slots for each week!
+// Generate upcoming weeks strictly excluding Jewish holidays
+// Guarantees 3 active working weeks with 3 available slots each!
 function generateUpcomingWeeks() {
   weeksData = [];
   const now = new Date();
@@ -169,34 +236,42 @@ function generateUpcomingWeeks() {
   nextSunday.setDate(now.getDate() + daysUntilNextSunday);
   nextSunday.setHours(0, 0, 0, 0);
 
-  const weekLabels = ["השבוע הבא", "עוד שבוע", "עוד שבועיים"];
+  const defaultWeekLabels = ["השבוע הבא", "עוד שבוע", "עוד שבועיים"];
+  let weekOffset = 0;
 
-  // Generate 3 consecutive weeks
-  for (let w = 0; w < 3; w++) {
+  // Find 3 weeks with available non-holiday slots (lookahead up to 8 weeks)
+  while (weeksData.length < 3 && weekOffset < 8) {
     const weekStart = new Date(nextSunday);
-    weekStart.setDate(nextSunday.getDate() + (w * 7));
+    weekStart.setDate(nextSunday.getDate() + (weekOffset * 7));
 
     const weekEndThursday = new Date(weekStart);
     weekEndThursday.setDate(weekStart.getDate() + 4);
 
-    const weekLabel = weekLabels[w];
     const startDayNum = weekStart.getDate();
     const endDayNum = weekEndThursday.getDate();
     const monthIndex = weekEndThursday.getMonth();
     const dateRangeLabel = `${startDayNum} - ${endDayNum} ${HEBREW_MONTHS_NAMES[monthIndex]}`;
     const dateRangeShort = `${startDayNum}-${endDayNum} ${HEBREW_MONTHS_SHORT_NAMES[monthIndex]}`;
 
-    // Dynamically pick exactly 3 available slots from candidate pool
+    let weekLabel = defaultWeekLabels[weeksData.length] || `${startDayNum}-${endDayNum} ${HEBREW_MONTHS_SHORT_NAMES[monthIndex]}`;
+    if (weekOffset > weeksData.length) {
+      // We skipped a holiday week, so show clear date label
+      weekLabel = `${startDayNum}-${endDayNum} ${HEBREW_MONTHS_SHORT_NAMES[monthIndex]}`;
+    }
+
     const slots = [];
     const usedDays = new Set();
 
-    // Pass 1: Try distinct days
+    // Pass 1: Try distinct non-holiday days
     for (const cand of CANDIDATE_SLOTS_POOL) {
       if (slots.length >= 3) break;
       if (usedDays.has(cand.dayOffset)) continue;
 
       const slotDate = new Date(weekStart);
       slotDate.setDate(weekStart.getDate() + cand.dayOffset);
+
+      // Skip Jewish holiday / Erev Chag
+      if (getJewishHolidayName(slotDate)) continue;
 
       const startDateTime = new Date(slotDate);
       startDateTime.setHours(cand.startHour, cand.startMin, 0, 0);
@@ -231,13 +306,15 @@ function generateUpcomingWeeks() {
       }
     }
 
-    // Pass 2: If we still need slots to reach 3, allow a second slot on the same day
+    // Pass 2: If we still need slots to reach 3, allow second slot on open non-holiday days
     if (slots.length < 3) {
       for (const cand of CANDIDATE_SLOTS_POOL) {
         if (slots.length >= 3) break;
 
         const slotDate = new Date(weekStart);
         slotDate.setDate(weekStart.getDate() + cand.dayOffset);
+
+        if (getJewishHolidayName(slotDate)) continue;
 
         const startDateTime = new Date(slotDate);
         startDateTime.setHours(cand.startHour, cand.startMin, 0, 0);
@@ -273,16 +350,19 @@ function generateUpcomingWeeks() {
       }
     }
 
-    // Sort chronologically
-    slots.sort((a, b) => a.startDateTime - b.startDateTime);
+    // If the week has at least 1 slot, add to active weeks
+    if (slots.length > 0) {
+      slots.sort((a, b) => a.startDateTime - b.startDateTime);
+      weeksData.push({
+        weekIndex: weeksData.length,
+        weekLabel,
+        dateRangeLabel,
+        dateRangeShort,
+        slots
+      });
+    }
 
-    weeksData.push({
-      weekIndex: w,
-      weekLabel,
-      dateRangeLabel,
-      dateRangeShort,
-      slots
-    });
+    weekOffset++;
   }
 }
 
@@ -477,30 +557,29 @@ function showConfirmedScreen(slotData) {
   const endDate = new Date(slotData.endIso);
   const googleDates = `${toGoogleCalendarFormat(startDate)}/${toGoogleCalendarFormat(endDate)}`;
   
-  const meetLink = "https://meet.google.com/guy-hadas-ops";
-  const eventTitle = encodeURIComponent(`שיחה עם גיא הדס`);
-  const eventDetails = encodeURIComponent(`שיחה אישית בת שעה עם גיא הדס (Executive Operations & Execution).\n\nמשתתפים:\n- ${clientName} (${clientPhone}, ${clientEmail})\n- גיא הדס (${GUY_CALENDAR_EMAIL})\n\nקישור לשיחת וידאו (Google Meet):\n${meetLink}\n\nשיחה אישית ודיסקרטית תחת NDA.`);
-  const eventLocation = encodeURIComponent(`Google Meet: ${meetLink}`);
+  const eventTitle = encodeURIComponent(`שיחה אישית: ${clientName} & גיא הדס`);
+  const eventDetails = encodeURIComponent(`שיחה אישית בת שעה עם גיא הדס (Executive Operations & Execution).\n\nמשתתפים:\n- ${clientName} (טל׳: ${clientPhone}, מייל: ${clientEmail})\n- גיא הדס (טל׳: 052-594-9682, מייל: ${GUY_CALENDAR_EMAIL})\n\nאופן ההתקשרות:\nגיא ייצור איתך קשר ישיר במספר ${clientPhone} במועד השיחה, או בקישור וידאו ייעודי שיועבר לקראת הפגישה.\n\nשיחה אישית ודיסקרטית תחת NDA.`);
+  const eventLocation = encodeURIComponent(clientPhone ? `שיחה אישית עם גיא הדס (${clientPhone})` : `שיחה אישית עם גיא הדס`);
 
   // Direct Google Calendar Add Event URL
   const googleCalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${eventTitle}&dates=${googleDates}&details=${eventDetails}&location=${eventLocation}&add=${GUY_CALENDAR_EMAIL}${clientEmail ? ',' + clientEmail : ''}`;
   googleCalBtn.href = googleCalUrl;
 
   // Send automated luxury meeting confirmation email
-  sendBookingConfirmationEmail(slotData, clientName, clientEmail, clientPhone, meetLink, googleCalUrl);
+  sendBookingConfirmationEmail(slotData, clientName, clientEmail, clientPhone, googleCalUrl);
 
   // Configure .ics download
-  downloadIcsBtn.onclick = () => downloadIcsFile(slotData, clientName, meetLink);
+  downloadIcsBtn.onclick = () => downloadIcsFile(slotData, clientName, clientPhone);
 
   bookingConfirmedCard.classList.remove('hidden');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 // Automated Meeting Confirmation Email with Luxury Hebrew HTML Template
-async function sendBookingConfirmationEmail(slotData, clientName, clientEmail, clientPhone, meetLink, googleCalUrl) {
+async function sendBookingConfirmationEmail(slotData, clientName, clientEmail, clientPhone, googleCalUrl) {
   if (!clientEmail) return;
 
-  const subject = `גיא הדס | אישור פגישה ל-${slotData.dayName}, ${slotData.dateStr} בשעה ${slotData.timeStr}`;
+  const subject = `גיא הדס | אישור פגישה אישית ל-${slotData.dayName}, ${slotData.dateStr} בשעה ${slotData.timeStr}`;
 
   const htmlBody = `
 <!DOCTYPE html>
@@ -543,17 +622,14 @@ async function sendBookingConfirmationEmail(slotData, clientName, clientEmail, c
           <strong>👤 משתתפים:</strong> ${clientName} &amp; גיא הדס
         </div>
         <div style="font-size: 16px; color: #0F172A;">
-          <strong>📍 פלטפורמה:</strong> שיחת וידאו ב-Google Meet
+          <strong>📞 אופן ההתקשרות:</strong> שיחה ישירה מול גיא הדס${clientPhone ? ` (לטלפון: <strong>${clientPhone}</strong>)` : ''} או בקישור ייעודי שיועבר לקראת המועד.
         </div>
       </div>
 
       <!-- Action Buttons -->
       <div style="text-align: center; margin: 28px 0 16px;">
-        <a href="${meetLink}" target="_blank" style="display: block; background: #0F172A; color: #ffffff; font-size: 15px; font-weight: 700; text-decoration: none; padding: 14px 24px; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 4px 14px rgba(15,23,42,0.2);">
-          📹 כניסה ל-Google Meet (${meetLink})
-        </a>
-        <a href="${googleCalUrl}" target="_blank" style="display: block; background: #FFFFFF; color: #0F172A; font-size: 15px; font-weight: 700; text-decoration: none; padding: 13px 24px; border-radius: 8px; border: 1px solid #CBD5E1;">
-          📅 הוסף ישירות ל-Google Calendar שלך
+        <a href="${googleCalUrl}" target="_blank" style="display: block; background: #059669; color: #ffffff; font-size: 16px; font-weight: 700; text-decoration: none; padding: 15px 24px; border-radius: 8px; box-shadow: 0 4px 14px rgba(5,150,105,0.25);">
+          📅 הוסף ל-Google Calendar שלך
         </a>
       </div>
 
@@ -582,6 +658,7 @@ async function sendBookingConfirmationEmail(slotData, clientName, clientEmail, c
   // Generate standard iCalendar REQUEST invite string for automatic calendar insertion
   const startDate = new Date(slotData.startIso);
   const endDate = new Date(slotData.endIso);
+  const locationText = clientPhone ? `שיחה אישית מול גיא הדס (${clientPhone})` : `שיחה אישית מול גיא הדס`;
 
   const icsInviteString = [
     'BEGIN:VCALENDAR',
@@ -595,9 +672,9 @@ async function sendBookingConfirmationEmail(slotData, clientName, clientEmail, c
     `DTSTAMP:${toIcsFormat(new Date())}`,
     `UID:${slotData.slotId}@guyhadas.xyz`,
     `SEQUENCE:0`,
-    `SUMMARY:שיחה עם גיא הדס`,
-    `DESCRIPTION:שיחה אישית בת שעה עם גיא הדס (Executive Operations & Execution).\\nלינק ישיר ל-Google Meet: ${meetLink}`,
-    `LOCATION:${meetLink}`,
+    `SUMMARY:שיחה אישית: ${clientName} & גיא הדס`,
+    `DESCRIPTION:שיחה אישית בת שעה עם גיא הדס (Executive Operations & Execution).\\nאופן ההתקשרות: גיא ייצור קשר ישיר בטלפון ${clientPhone || 'של הלקוח'} או בקישור ייעודי שיישלח לקראת השיחה.`,
+    `LOCATION:${locationText}`,
     `ORGANIZER;CN=Guy Hadas:mailto:${GUY_CALENDAR_EMAIL}`,
     `ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;CN=Guy Hadas:mailto:${GUY_CALENDAR_EMAIL}`,
     clientEmail ? `ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;CN=${clientName}:mailto:${clientEmail}` : '',
@@ -617,7 +694,7 @@ async function sendBookingConfirmationEmail(slotData, clientName, clientEmail, c
         cc: GUY_CALENDAR_EMAIL,
         subject: subject,
         html: htmlBody,
-        text: `היי ${clientName},\n\nהפגישה בינינו נקבעה בהצלחה ביומן:\nמועד: ${slotData.dayName}, ${slotData.dateStr} בשעה ${slotData.timeStr}\nקישור Google Meet: ${meetLink}\n\nבברכה,\nגיא הדס\n052-594-9682`,
+        text: `היי ${clientName},\n\nהפגישה בינינו נקבעה בהצלחה ביומן:\nמועד: ${slotData.dayName}, ${slotData.dateStr} בשעה ${slotData.timeStr}\nאופן התקשרות: גיא הדס ייצור איתך קשר טלפוני במועד השיחה${clientPhone ? ` למספר ${clientPhone}` : ''} או בקישור ייעודי שיועבר לקראת הפגישה.\n\nבברכה,\nגיא הדס\n052-594-9682`,
         icsContent: icsInviteString
       })
     });
@@ -628,9 +705,10 @@ async function sendBookingConfirmationEmail(slotData, clientName, clientEmail, c
 }
 
 // Generate .ics calendar file
-function downloadIcsFile(slotData, clientName, meetLink) {
+function downloadIcsFile(slotData, clientName, clientPhone) {
   const startDate = new Date(slotData.startIso);
   const endDate = new Date(slotData.endIso);
+  const locationText = clientPhone ? `שיחה אישית מול גיא הדס (${clientPhone})` : `שיחה אישית מול גיא הדס`;
 
   const icsContent = [
     'BEGIN:VCALENDAR',
@@ -643,9 +721,9 @@ function downloadIcsFile(slotData, clientName, meetLink) {
     `DTEND:${toIcsFormat(endDate)}`,
     `DTSTAMP:${toIcsFormat(new Date())}`,
     `UID:${slotData.slotId}@guyhadas.xyz`,
-    `SUMMARY:שיחה עם גיא הדס`,
-    `DESCRIPTION:שיחה אישית בת שעה עם גיא הדס (Executive Operations & Execution).\\nלינק ל-Google Meet: ${meetLink}`,
-    `LOCATION:${meetLink}`,
+    `SUMMARY:שיחה אישית: ${clientName} & גיא הדס`,
+    `DESCRIPTION:שיחה אישית בת שעה עם גיא הדס (Executive Operations & Execution).\\nאופן ההתקשרות: שיחה ישירה מול גיא הדס (052-594-9682).`,
+    `LOCATION:${locationText}`,
     `ORGANIZER;CN=Guy Hadas:MAILTO:${GUY_CALENDAR_EMAIL}`,
     'STATUS:CONFIRMED',
     'END:VEVENT',

@@ -7,6 +7,73 @@ const db = admin.firestore();
 
 const GUY_CALENDAR_EMAIL = "mr.hadas@gmail.com";
 
+// --- JEWISH HOLIDAYS & EREV CHAG CALENDAR (2025 - 2028) ---
+// All Jewish holidays, Erev Chag, Chol HaMoed, and National Days are completely blocked from booking
+const JEWISH_HOLIDAYS = {
+  // 2025
+  "2025-03-13": "ערב פורים", "2025-03-14": "פורים", "2025-03-15": "שושן פורים",
+  "2025-04-12": "ערב פסח", "2025-04-13": "פסח א׳", "2025-04-14": "חוה״מ פסח",
+  "2025-04-15": "חוה״מ פסח", "2025-04-16": "חוה״מ פסח", "2025-04-17": "חוה״מ פסח",
+  "2025-04-18": "חוה״מ פסח", "2025-04-19": "שביעי של פסח", "2025-04-30": "יום הזכרון",
+  "2025-05-01": "יום העצמאות", "2025-06-01": "ערב שבועות", "2025-06-02": "חג שבועות",
+  "2025-08-02": "ערב תשעה באב", "2025-08-03": "צום תשעה באב", "2025-09-22": "ערב ראש השנה",
+  "2025-09-23": "ראש השנה א׳", "2025-09-24": "ראש השנה ב׳", "2025-09-25": "צום גדליה",
+  "2025-10-01": "ערב יום כיפור", "2025-10-02": "יום כיפור", "2025-10-06": "ערב סוכות",
+  "2025-10-07": "סוכות א׳", "2025-10-08": "חוה״מ סוכות", "2025-10-09": "חוה״מ סוכות",
+  "2025-10-10": "חוה״מ סוכות", "2025-10-11": "חוה״מ סוכות", "2025-10-12": "חוה״מ סוכות",
+  "2025-10-13": "הושענא רבה", "2025-10-14": "שמחת תורה",
+
+  // 2026
+  "2026-03-02": "ערב פורים", "2026-03-03": "פורים", "2026-03-04": "שושן פורים",
+  "2026-04-01": "ערב פסח", "2026-04-02": "פסח א׳", "2026-04-03": "חוה״מ פסח",
+  "2026-04-04": "חוה״מ פסח", "2026-04-05": "חוה״מ פסח", "2026-04-06": "חוה״מ פסח",
+  "2026-04-07": "חוה״מ פסח", "2026-04-08": "שביעי של פסח", "2026-04-21": "יום הזכרון",
+  "2026-04-22": "יום העצמאות", "2026-05-21": "ערב שבועות", "2026-05-22": "חג שבועות",
+  "2026-07-22": "ערב תשעה באב", "2026-07-23": "צום תשעה באב", "2026-09-11": "ערב ראש השנה",
+  "2026-09-12": "ראש השנה א׳", "2026-09-13": "ראש השנה ב׳", "2026-09-14": "צום גדליה",
+  "2026-09-20": "ערב יום כיפור", "2026-09-21": "יום כיפור", "2026-09-25": "ערב סוכות",
+  "2026-09-26": "סוכות א׳", "2026-09-27": "חוה״מ סוכות", "2026-09-28": "חוה״מ סוכות",
+  "2026-09-29": "חוה״מ סוכות", "2026-09-30": "חוה״מ סוכות", "2026-10-01": "חוה״מ סוכות",
+  "2026-10-02": "הושענא רבה", "2026-10-03": "שמחת תורה",
+
+  // 2027
+  "2027-03-22": "ערב פורים", "2027-03-23": "פורים", "2027-03-24": "שושן פורים",
+  "2027-04-21": "ערב פסח", "2027-04-22": "פסח א׳", "2027-04-23": "חוה״מ פסח",
+  "2027-04-24": "חוה״מ פסח", "2027-04-25": "חוה״מ פסח", "2027-04-26": "חוה״מ פסח",
+  "2027-04-27": "חוה״מ פסח", "2027-04-28": "שביעי של פסח", "2027-05-11": "יום הזכרון",
+  "2027-05-12": "יום העצמאות", "2027-06-10": "ערב שבועות", "2027-06-11": "חג שבועות",
+  "2027-08-11": "ערב תשעה באב", "2027-08-12": "צום תשעה באב", "2027-10-01": "ערב ראש השנה",
+  "2027-10-02": "ראש השנה א׳", "2027-10-03": "ראש השנה ב׳", "2027-10-04": "צום גדליה",
+  "2027-10-10": "ערב יום כיפור", "2027-10-11": "יום כיפור", "2027-10-15": "ערב סוכות",
+  "2027-10-16": "סוכות א׳", "2027-10-17": "חוה״מ סוכות", "2027-10-18": "חוה״מ סוכות",
+  "2027-10-19": "חוה״מ סוכות", "2027-10-20": "חוה״מ סוכות", "2027-10-21": "חוה״מ סוכות",
+  "2027-10-22": "הושענא רבה", "2027-10-23": "שמחת תורה",
+
+  // 2028
+  "2028-03-11": "ערב פורים", "2028-03-12": "פורים", "2028-03-13": "שושן פורים",
+  "2028-04-10": "ערב פסח", "2028-04-11": "פסח א׳", "2028-04-12": "חוה״מ פסח",
+  "2028-04-13": "חוה״מ פסח", "2028-04-14": "חוה״מ פסח", "2028-04-15": "חוה״מ פסח",
+  "2028-04-16": "חוה״מ פסח", "2028-04-17": "שביעי של פסח", "2028-05-01": "יום הזכרון",
+  "2028-05-02": "יום העצמאות", "2028-05-30": "ערב שבועות", "2028-05-31": "חג שבועות",
+  "2028-07-31": "ערב תשעה באב", "2028-08-01": "צום תשעה באב", "2028-09-20": "ערב ראש השנה",
+  "2028-09-21": "ראש השנה א׳", "2028-09-22": "ראש השנה ב׳", "2028-09-29": "ערב יום כיפור",
+  "2028-09-30": "יום כיפור", "2028-10-04": "ערב סוכות", "2028-10-05": "סוכות א׳",
+  "2028-10-06": "חוה״מ סוכות", "2028-10-07": "חוה״מ סוכות", "2028-10-08": "חוה״מ סוכות",
+  "2028-10-09": "חוה״מ סוכות", "2028-10-10": "חוה״מ סוכות", "2028-10-11": "הושענא רבה",
+  "2028-10-12": "שמחת תורה"
+};
+
+function getISODateKey(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function getJewishHolidayName(d) {
+  return JEWISH_HOLIDAYS[getISODateKey(d)] || null;
+}
+
 // Firestore Trigger on new booking creation
 exports.syncMeetingToGoogleCalendar = functions.firestore
   .document("bookings/{slotId}")
@@ -31,12 +98,12 @@ exports.syncMeetingToGoogleCalendar = functions.firestore
       const startIso = booking.startIso;
       const endIso = booking.endIso;
 
-      const meetLink = "https://meet.google.com/guy-hadas-ops";
+      const eventLocation = clientPhone ? `שיחה אישית מול גיא הדס (${clientPhone})` : `שיחה אישית מול גיא הדס`;
 
       const eventResource = {
         summary: `שיחה עם גיא הדס | ${clientName}`,
-        description: `שיחה אישית בת שעה עם גיא הדס (Executive Operations & Execution).\n\nמשתתפים:\n- ${clientName} (${clientPhone}, ${clientEmail})\n- גיא הדס (${GUY_CALENDAR_EMAIL})\n\nקישור ל-Google Meet:\n${meetLink}\n\nשיחה אישית ודיסקרטית תחת NDA.`,
-        location: meetLink,
+        description: `שיחה אישית בת שעה עם גיא הדס (Executive Operations & Execution).\n\nמשתתפים:\n- ${clientName} (טל׳: ${clientPhone}, מייל: ${clientEmail})\n- גיא הדס (טל׳: 052-594-9682, מייל: ${GUY_CALENDAR_EMAIL})\n\nאופן ההתקשרות:\nגיא ייצור קשר טלפוני במספר ${clientPhone || 'של הלקוח'} במועד השיחה, או בקישור וידאו ייעודי שיועבר לקראת הפגישה.\n\nשיחה אישית ודיסקרטית תחת NDA.`,
+        location: eventLocation,
         start: {
           dateTime: startIso,
           timeZone: "Asia/Jerusalem"
@@ -66,7 +133,6 @@ exports.syncMeetingToGoogleCalendar = functions.firestore
       await snap.ref.update({
         googleCalendarEventId: res.data.id,
         googleCalendarHtmlLink: res.data.htmlLink,
-        googleMeetLink: meetLink,
         calendarSynced: true,
         calendarSyncedAt: admin.firestore.FieldValue.serverTimestamp()
       });
@@ -74,7 +140,6 @@ exports.syncMeetingToGoogleCalendar = functions.firestore
       if (booking.leadId) {
         await db.collection("leads").doc(booking.leadId).update({
           googleCalendarEventId: res.data.id,
-          googleMeetLink: meetLink,
           meetingSet: true
         });
       }
@@ -109,12 +174,12 @@ exports.createMeetingDirect = functions.https.onRequest(async (req, res) => {
 
     const calendar = google.calendar({ version: "v3", auth });
 
-    const meetLink = "https://meet.google.com/guy-hadas-ops";
+    const eventLocation = clientPhone ? `שיחה אישית מול גיא הדס (${clientPhone})` : `שיחה אישית מול גיא הדס`;
 
     const eventResource = {
       summary: `שיחה עם גיא הדס | ${clientName || 'לקוח'}`,
-      description: `שיחה אישית בת שעה עם גיא הדס (Executive Operations & Execution).\n\nמשתתפים:\n- ${clientName} (${clientPhone}, ${clientEmail})\n- גיא הדס (${GUY_CALENDAR_EMAIL})\n\nקישור ל-Google Meet:\n${meetLink}\n\nשיחה אישית ודיסקרטית תחת NDA.`,
-      location: meetLink,
+      description: `שיחה אישית בת שעה עם גיא הדס (Executive Operations & Execution).\n\nמשתתפים:\n- ${clientName} (טל׳: ${clientPhone}, מייל: ${clientEmail})\n- גיא הדס (טל׳: 052-594-9682, מייל: ${GUY_CALENDAR_EMAIL})\n\nאופן ההתקשרות:\nגיא ייצור קשר ישיר בטלפון ${clientPhone || 'של הלקוח'} במועד השיחה, או בקישור וידאו ייעודי שיועבר לקראת הפגישה.\n\nשיחה אישית ודיסקרטית תחת NDA.`,
+      location: eventLocation,
       start: {
         dateTime: slotData.startIso,
         timeZone: "Asia/Jerusalem"
@@ -137,8 +202,7 @@ exports.createMeetingDirect = functions.https.onRequest(async (req, res) => {
     res.status(200).json({
       success: true,
       eventId: calendarRes.data.id,
-      htmlLink: calendarRes.data.htmlLink,
-      meetLink: meetLink
+      htmlLink: calendarRes.data.htmlLink
     });
   } catch (err) {
     console.error("Direct calendar injection error:", err);
@@ -197,7 +261,7 @@ function formatDateIsoWithOffset(date, hours, minutes, offsetHours) {
 }
 
 // HTTP Endpoint: Dynamically checks Google Calendar (mr.hadas@gmail.com) and Firestore bookings
-// Guaranteed to ALWAYS find 3 available slots for next week, +1 week, and +2 weeks
+// Blocks all Jewish holidays and always returns 3 working weeks with available slots
 exports.getAvailableSlots = functions.https.onRequest(async (req, res) => {
   res.set("Access-Control-Allow-Origin", "*");
   res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -219,12 +283,12 @@ exports.getAvailableSlots = functions.https.onRequest(async (req, res) => {
     nextSunday.setDate(jerusalemToday.getDate() + daysUntilNextSunday);
     nextSunday.setHours(0, 0, 0, 0);
 
-    const endOfThirdWeek = new Date(nextSunday);
-    endOfThirdWeek.setDate(nextSunday.getDate() + 21); // 3 full weeks
+    const endOfLookahead = new Date(nextSunday);
+    endOfLookahead.setDate(nextSunday.getDate() + (8 * 7)); // 8 weeks lookahead
 
     const tzOffset = getIsraelTimezoneOffsetHours(nextSunday);
     const windowStartIso = formatDateIsoWithOffset(nextSunday, 0, 0, tzOffset);
-    const windowEndIso = formatDateIsoWithOffset(endOfThirdWeek, 23, 59, tzOffset);
+    const windowEndIso = formatDateIsoWithOffset(endOfLookahead, 23, 59, tzOffset);
 
     // 1. Fetch busy times from Google Calendar
     const busyIntervals = [];
@@ -286,35 +350,43 @@ exports.getAvailableSlots = functions.https.onRequest(async (req, res) => {
       console.warn("Could not fetch Firestore bookings:", dbErr.message);
     }
 
-    // 3. For each of the 3 weeks, dynamically find 3 AVAILABLE slots
+    // 3. Look ahead to find 3 working weeks with available non-holiday slots
     const weeks = [];
-    const weekLabels = ["השבוע הבא", "עוד שבוע", "עוד שבועיים"];
+    const defaultWeekLabels = ["השבוע הבא", "עוד שבוע", "עוד שבועיים"];
+    let weekOffset = 0;
 
-    for (let w = 0; w < 3; w++) {
+    while (weeks.length < 3 && weekOffset < 8) {
       const weekStart = new Date(nextSunday);
-      weekStart.setDate(nextSunday.getDate() + (w * 7));
+      weekStart.setDate(nextSunday.getDate() + (weekOffset * 7));
 
       const weekEndThursday = new Date(weekStart);
       weekEndThursday.setDate(weekStart.getDate() + 4);
 
-      const weekLabel = weekLabels[w];
       const startDayNum = weekStart.getDate();
       const endDayNum = weekEndThursday.getDate();
       const monthIndex = weekEndThursday.getMonth();
       const dateRangeLabel = `${startDayNum} - ${endDayNum} ${HEBREW_MONTHS[monthIndex]}`;
       const dateRangeShort = `${startDayNum}-${endDayNum} ${HEBREW_MONTHS_SHORT[monthIndex]}`;
 
+      let weekLabel = defaultWeekLabels[weeks.length] || `${startDayNum}-${endDayNum} ${HEBREW_MONTHS_SHORT[monthIndex]}`;
+      if (weekOffset > weeks.length) {
+        weekLabel = `${startDayNum}-${endDayNum} ${HEBREW_MONTHS_SHORT[monthIndex]}`;
+      }
+
       // Pick available slots from candidate pool
       const availableSlots = [];
       const usedDays = new Set();
 
-      // Pass 1: Try to pick slots on different days
+      // Pass 1: Try to pick slots on different non-holiday days
       for (const cand of CANDIDATE_SLOTS_POOL) {
         if (availableSlots.length >= 3) break;
         if (usedDays.has(cand.dayOffset)) continue;
 
         const slotDate = new Date(weekStart);
         slotDate.setDate(weekStart.getDate() + cand.dayOffset);
+
+        // Skip Jewish holidays and Erev Chag
+        if (getJewishHolidayName(slotDate)) continue;
 
         const slotOffset = getIsraelTimezoneOffsetHours(slotDate);
         const startIso = formatDateIsoWithOffset(slotDate, cand.startHour, cand.startMin, slotOffset);
@@ -342,13 +414,15 @@ exports.getAvailableSlots = functions.https.onRequest(async (req, res) => {
         }
       }
 
-      // Pass 2: If we still don't have 3 slots, allow a second slot on the same day
+      // Pass 2: If we still don't have 3 slots, allow a second slot on open non-holiday days
       if (availableSlots.length < 3) {
         for (const cand of CANDIDATE_SLOTS_POOL) {
           if (availableSlots.length >= 3) break;
 
           const slotDate = new Date(weekStart);
           slotDate.setDate(weekStart.getDate() + cand.dayOffset);
+
+          if (getJewishHolidayName(slotDate)) continue;
 
           const slotOffset = getIsraelTimezoneOffsetHours(slotDate);
           const startIso = formatDateIsoWithOffset(slotDate, cand.startHour, cand.startMin, slotOffset);
@@ -379,16 +453,20 @@ exports.getAvailableSlots = functions.https.onRequest(async (req, res) => {
         }
       }
 
-      // Sort chronological
-      availableSlots.sort((a, b) => a.startMs - b.startMs);
+      if (availableSlots.length > 0) {
+        // Sort chronological
+        availableSlots.sort((a, b) => a.startMs - b.startMs);
 
-      weeks.push({
-        weekIndex: w,
-        weekLabel,
-        dateRangeLabel,
-        dateRangeShort,
-        slots: availableSlots
-      });
+        weeks.push({
+          weekIndex: weeks.length,
+          weekLabel,
+          dateRangeLabel,
+          dateRangeShort,
+          slots: availableSlots
+        });
+      }
+
+      weekOffset++;
     }
 
     res.status(200).json({
