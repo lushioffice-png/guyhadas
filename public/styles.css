@@ -1549,33 +1549,54 @@ h1, h2, h3, h4 {
 
   /* --- Section 3: Executive Synergy Matrix (Mobile) --- */
   .exec-matrix {
-    border-radius: var(--radius-md);
+    border: none;
+    background: transparent;
+    box-shadow: none;
+    overflow: visible;
   }
 
   .exec-matrix-grid {
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
   }
 
   .exec-col {
-    padding: 22px 18px;
+    border-radius: 20px;
+    padding: 22px 18px 20px;
+    box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04);
   }
 
   .exec-col.client-col {
-    border-left: none;
-    border-bottom: 1px solid var(--color-slate-200);
+    border: 1px solid #E2E8F0;
+    background: #FFFFFF;
+  }
+
+  .exec-col.advisor-col {
+    border: 1.5px solid #A7F3D0;
+    background: #F8FDFA;
+    box-shadow: 0 6px 22px rgba(5, 150, 105, 0.06);
   }
 
   .exec-col-header {
     margin-bottom: 16px;
-    padding-bottom: 12px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+  }
+
+  .exec-col.advisor-col .exec-col-header {
+    border-bottom-color: rgba(167, 243, 208, 0.7);
   }
 
   .exec-col-title {
     font-size: 1.15rem;
+    font-weight: 800;
   }
 
   .exec-col-sub {
-    font-size: 0.82rem;
+    font-size: 0.84rem;
+    color: var(--color-slate-600);
+    line-height: 1.4;
   }
 
   .exec-list {
@@ -1583,41 +1604,79 @@ h1, h2, h3, h4 {
   }
 
   .exec-item {
-    gap: 10px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 3px 0;
   }
 
   .exec-icon {
-    width: 28px;
-    height: 28px;
-    min-width: 28px;
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 2px;
+  }
+
+  .exec-icon.client {
+    background: #F1F5F9;
+    color: #475569;
+    border: 1px solid #E2E8F0;
+  }
+
+  .exec-icon.advisor {
+    background: #DCFCE7;
+    color: #047857;
+    border: 1px solid #86EFAC;
   }
 
   .exec-icon svg {
-    width: 15px;
-    height: 15px;
+    width: 16px;
+    height: 16px;
   }
 
   .exec-item-title {
-    font-size: 0.9rem;
+    font-size: 0.94rem;
+    font-weight: 700;
+    color: var(--color-slate-900);
+    line-height: 1.35;
   }
 
   .exec-item-desc {
-    font-size: 0.81rem;
+    font-size: 0.83rem;
+    color: var(--color-slate-600);
+    line-height: 1.4;
   }
 
   .exec-matrix-footer {
+    margin-top: 14px;
+    border-radius: 16px;
+    border: 1px solid #E2E8F0;
+    background: #FFFFFF;
+    box-shadow: 0 2px 10px rgba(15, 23, 42, 0.03);
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
-    padding: 14px 18px;
+    padding: 16px 18px 18px 68px;
   }
 
   .exec-footer-badge {
-    font-size: 0.72rem;
+    font-size: 0.74rem;
+    padding: 3px 10px;
+    border-radius: 6px;
+    background: #ECFDF5;
+    color: #047857;
+    border: 1px solid #A7F3D0;
+    font-weight: 800;
   }
 
   .exec-footer-text {
-    font-size: 0.84rem;
+    font-size: 0.88rem;
+    color: var(--color-slate-700);
+    line-height: 1.5;
   }
 
   .footer-container {
