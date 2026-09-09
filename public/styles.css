@@ -139,15 +139,10 @@ h1, h2, h3, h4 {
   box-shadow: 0 2px 8px rgba(4, 120, 87, 0.2);
 }
 
-/* Client-Centric Subtle Editorial Highlighter */
+/* Client-Centric Clean Emphasis */
 .highlight-you {
   color: var(--color-slate-900);
   font-weight: 800;
-  position: relative;
-  display: inline;
-  background: linear-gradient(180deg, transparent 62%, #d1fae5 62%);
-  padding: 0 3px;
-  border-radius: 2px;
 }
 
 .btn-lg {
