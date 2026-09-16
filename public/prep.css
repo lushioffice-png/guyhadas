@@ -207,7 +207,7 @@ body {
   border: 1px solid var(--color-slate-300);
   border-radius: var(--radius-sm);
   font-family: inherit;
-  font-size: 0.96rem;
+  font-size: 1rem; /* 16px min: prevents iOS Safari auto-zoom on focus */
   color: var(--color-slate-900);
   background-color: var(--color-slate-50);
   outline: none;

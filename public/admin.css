@@ -200,7 +200,7 @@ body {
   border: 1px solid var(--color-slate-300);
   border-radius: var(--radius-sm);
   font-family: inherit;
-  font-size: 0.95rem;
+  font-size: 1rem; /* 16px min: prevents iOS Safari auto-zoom on focus */
   background-color: var(--color-white);
   color: var(--color-slate-900);
   outline: none;
@@ -238,6 +238,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .brand-group {
@@ -315,6 +317,17 @@ body {
 .tabs-group {
   display: flex;
   gap: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.tabs-group::-webkit-scrollbar {
+  display: none;
+}
+
+.tab-btn {
+  flex-shrink: 0;
 }
 
 .tab-btn {
@@ -379,7 +392,7 @@ body {
   border: 1px solid var(--color-slate-300);
   border-radius: var(--radius-sm);
   font-family: inherit;
-  font-size: 0.9rem;
+  font-size: 1rem; /* 16px min: prevents iOS Safari auto-zoom on focus */
   background: var(--color-white);
 }
 
@@ -388,7 +401,7 @@ body {
   border: 1px solid var(--color-slate-300);
   border-radius: var(--radius-sm);
   font-family: inherit;
-  font-size: 0.9rem;
+  font-size: 1rem; /* 16px min: prevents iOS Safari auto-zoom on focus */
   background: var(--color-white);
   cursor: pointer;
 }
@@ -534,8 +547,8 @@ body {
   background: none;
   border: 1px solid var(--color-slate-200);
   border-radius: var(--radius-sm);
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   display: inline-flex;
   align-items: center;
   justify-content: center;

@@ -469,16 +469,17 @@ body {
   }
 
   .week-tab-btn {
-    padding: 8px 4px;
+    padding: 10px 4px;
+    min-height: 44px;
   }
 
   .week-tab-btn .tab-title {
-    font-size: 0.82rem;
+    font-size: 0.84rem;
     font-weight: 800;
   }
 
   .week-tab-btn .tab-dates {
-    font-size: 0.68rem;
+    font-size: 0.7rem;
   }
 
   .slots-grid {
