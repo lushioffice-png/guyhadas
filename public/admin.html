@@ -23,9 +23,13 @@
       </div>
       <form id="login-form">
         <div class="form-group">
-          <label for="admin-password">סיסמת כניסה</label>
-          <input type="password" id="admin-password" placeholder="הזן סיסמה..." autocomplete="current-password" required autofocus>
-          <span id="login-error" class="login-error">סיסמה שגויה, נסה שוב.</span>
+          <label for="admin-email">אימייל</label>
+          <input type="email" id="admin-email" placeholder="you@example.com" dir="ltr" autocomplete="username" required autofocus>
+        </div>
+        <div class="form-group">
+          <label for="admin-password">סיסמה</label>
+          <input type="password" id="admin-password" placeholder="הזן סיסמה..." autocomplete="current-password" required>
+          <span id="login-error" class="login-error">פרטי ההתחברות שגויים, נסה שוב.</span>
         </div>
         <button type="submit" class="btn btn-primary btn-block" id="login-btn">כניסה למערכת</button>
       </form>
