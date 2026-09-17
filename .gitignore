@@ -15,3 +15,9 @@ Thumbs.db
 
 # Temp / Agent files
 *.local
+
+# Secrets - real values only ever live in Secret Manager / local emulator
+# config, never in the repo. See functions/.env.example.
+functions/.env
+functions/.env.*
+!functions/.env.example

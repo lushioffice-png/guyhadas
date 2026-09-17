@@ -478,7 +478,14 @@ exports.getAvailableSlots = functions.https.onRequest(async (req, res) => {
 // Direct White-Label Transactional Email Dispatcher (Zero 3rd-party wrappers)
 const nodemailer = require("nodemailer");
 
-exports.sendEmailDirect = functions.https.onRequest(async (req, res) => {
+// The Gmail App Password used to live here in plain text, committed to the
+// repo. It's now read from a Secret Manager secret at runtime instead - see
+// functions/.env.example for what to set it to, and the README for the
+// one-time `firebase functions:secrets:set` step. That old password should
+// be treated as compromised and revoked in the Google Account regardless.
+exports.sendEmailDirect = functions
+  .runWith({ secrets: ["GMAIL_APP_PASSWORD"] })
+  .https.onRequest(async (req, res) => {
   res.set("Access-Control-Allow-Origin", "*");
   res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.set("Access-Control-Allow-Headers", "Content-Type");
@@ -495,12 +502,19 @@ exports.sendEmailDirect = functions.https.onRequest(async (req, res) => {
       return;
     }
 
-    // Configure Direct Gmail SMTP Transporter with Google App Password
+    if (!process.env.GMAIL_APP_PASSWORD) {
+      console.error("GMAIL_APP_PASSWORD is not set - see functions/.env.example");
+      res.status(500).json({ success: false, error: "Email sender is not configured" });
+      return;
+    }
+
+    // Configure Direct Gmail SMTP Transporter with a Google App Password
+    // loaded from Secret Manager (see functions/.env.example), never hardcoded.
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
-        user: "mr.hadas@gmail.com",
-        pass: "pmghbrgeulsawdir"
+        user: process.env.GMAIL_USER || GUY_CALENDAR_EMAIL,
+        pass: process.env.GMAIL_APP_PASSWORD
       }
     });
 

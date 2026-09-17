@@ -4,18 +4,24 @@
  */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { 
-  getFirestore, 
-  collection, 
-  doc, 
-  getDoc, 
-  setDoc, 
-  updateDoc, 
-  deleteDoc, 
-  onSnapshot, 
-  query, 
-  orderBy 
+import {
+  getFirestore,
+  collection,
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  onSnapshot,
+  query,
+  orderBy
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import {
+  getAuth,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 // Firebase Configuration
 const firebaseConfig = {
@@ -30,10 +36,14 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const auth = getAuth(app);
 
-// Authentication Passcode (Initial default: guy2026)
-const ADMIN_PASSCODE = "guy2026";
-const AUTH_KEY = "guy_admin_authenticated";
+// Only this address is treated as admin - matches the isAdmin() check in
+// firestore.rules. Signing in with any other account will authenticate
+// successfully against Firebase Auth but the Firestore reads below will
+// still be denied by the rules, so it just shows an empty/error dashboard;
+// we also check it client-side to fail fast with a clear message instead.
+const ADMIN_EMAIL = "mr.hadas@gmail.com";
 
 // State
 let allLeads = [];
@@ -43,8 +53,10 @@ let unsubscribeLeads = null;
 // DOM Elements
 const loginModal = document.getElementById('login-modal');
 const loginForm = document.getElementById('login-form');
+const adminEmailInput = document.getElementById('admin-email');
 const adminPasswordInput = document.getElementById('admin-password');
 const loginError = document.getElementById('login-error');
+const loginBtn = document.getElementById('login-btn');
 const adminApp = document.getElementById('admin-app');
 const logoutBtn = document.getElementById('logout-btn');
 
@@ -85,41 +97,54 @@ const confirmAnswersModalBtn = document.getElementById('confirm-answers-modal-bt
 
 const toast = document.getElementById('toast');
 
-// --- 1. AUTHENTICATION LOGIC ---
-function checkAuth() {
-  const isAuth = sessionStorage.getItem(AUTH_KEY) === 'true';
-  if (isAuth) {
+// --- 1. AUTHENTICATION LOGIC (real Firebase Auth - enforced server-side by firestore.rules) ---
+onAuthStateChanged(auth, (user) => {
+  if (user && user.email === ADMIN_EMAIL) {
     loginModal.classList.add('hidden');
     adminApp.classList.remove('hidden');
     initDashboard();
   } else {
+    if (unsubscribeLeads) unsubscribeLeads();
     loginModal.classList.remove('hidden');
     adminApp.classList.add('hidden');
+    // Signed in as the wrong account: Firestore will reject every read
+    // anyway, so sign back out rather than show a dashboard full of errors.
+    if (user && user.email !== ADMIN_EMAIL) {
+      signOut(auth);
+      loginError.textContent = 'חשבון זה אינו מורשה לגשת לפורטל הניהול.';
+      loginError.classList.add('visible');
+    }
   }
-}
+});
 
 if (loginForm) {
-  loginForm.addEventListener('submit', (e) => {
+  loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const entered = adminPasswordInput.value.trim();
-    if (entered === ADMIN_PASSCODE) {
-      sessionStorage.setItem(AUTH_KEY, 'true');
-      loginError.classList.remove('visible');
+    const email = adminEmailInput.value.trim();
+    const password = adminPasswordInput.value;
+
+    loginBtn.disabled = true;
+    loginError.classList.remove('visible');
+
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
       loginForm.reset();
-      checkAuth();
       showToast('התחברת בהצלחה למערכת');
-    } else {
+    } catch (err) {
+      console.error("Login error:", err);
+      loginError.textContent = 'פרטי ההתחברות שגויים, נסה שוב.';
       loginError.classList.add('visible');
       adminPasswordInput.focus();
+    } finally {
+      loginBtn.disabled = false;
     }
   });
 }
 
 if (logoutBtn) {
-  logoutBtn.addEventListener('click', () => {
-    sessionStorage.removeItem(AUTH_KEY);
+  logoutBtn.addEventListener('click', async () => {
     if (unsubscribeLeads) unsubscribeLeads();
-    checkAuth();
+    await signOut(auth);
     showToast('התנתקת מהמערכת');
   });
 }
@@ -753,5 +778,5 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
-// Check initial authentication
-document.addEventListener('DOMContentLoaded', checkAuth);
+// No init call needed here: onAuthStateChanged above fires on load with
+// the current session state (or null) and drives the login/dashboard split.

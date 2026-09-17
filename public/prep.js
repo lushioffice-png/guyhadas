@@ -4,13 +4,14 @@
  */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { 
-  getFirestore, 
-  doc, 
-  getDoc, 
-  setDoc, 
-  updateDoc, 
-  serverTimestamp 
+import {
+  getFirestore,
+  doc,
+  collection,
+  getDoc,
+  setDoc,
+  updateDoc,
+  serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 // Firebase Configuration
@@ -227,9 +228,12 @@ async function handleFormSubmit(e) {
         status: 'prep_done'
       });
     } else {
-      // Create new lead document
-      finalLeadId = `lead_${Date.now()}`;
-      const leadRef = doc(db, "leads", finalLeadId);
+      // Create new lead document. Use Firestore's own random push-id rather
+      // than a timestamp: this id doubles as the access token prep.html and
+      // book.html use to read/update the lead with no login, so it needs to
+      // be unguessable, not just unique.
+      const leadRef = doc(collection(db, "leads"));
+      finalLeadId = leadRef.id;
       await setDoc(leadRef, {
         fullName: personName,
         phone: personPhone,

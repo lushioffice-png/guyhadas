@@ -2,32 +2,64 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Default deny
+
+    // Only mr.hadas@gmail.com, signed in with real Firebase Auth, is admin.
+    // (Not just "any authenticated user" - Email/Password sign-up is public
+    // by default, so this must check the specific address, not just auth != null.)
+    function isAdmin() {
+      return request.auth != null && request.auth.token.email == 'mr.hadas@gmail.com';
+    }
+
+    // Default deny for anything not explicitly opened below.
     match /{document=**} {
       allow read, write: if false;
     }
-    
-    // Leads collection
+
     match /leads/{leadId} {
-      // Public creation from landing page
+      // Public: the landing-page form (and the no-id prep.html fallback)
+      // creates a new lead. Validated shape, same as before.
       allow create: if request.resource.data.fullName is string
                     && request.resource.data.fullName.size() >= 2
                     && request.resource.data.phone is string;
-      
-      // Allow reading and updating from admin portal or questionnaire submission
-      allow read, update: if true;
-      allow delete: if true;
+
+      // Public: prep.html and book.html read one lead by its own id (the id
+      // acts as a bearer token - see the note on lead-id generation) and may
+      // only touch the handful of fields the client flow actually writes,
+      // moving "status" only to the values that flow legitimately sets.
+      // Admin (the dashboard) can update any field to any value, e.g. the
+      // status dropdown's full set of options.
+      allow get: if true;
+      allow update: if isAdmin()
+                    || (request.resource.data.diff(resource.data).affectedKeys()
+                          .hasOnly(['intakeAnswers', 'intakeSubmittedAt', 'intakeSubmittedDate',
+                                    'status', 'meetingSlot'])
+                        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['status'])
+                            || request.resource.data.status in ['prep_done', 'meeting_set']));
+
+      // Admin only: see every lead at once, or remove one.
+      allow list: if isAdmin();
+      allow delete: if isAdmin();
     }
 
-    // Intake questions settings collection
+    // Intake questions shown on prep.html - public read (it's the public
+    // form itself), admin-only write (that's the question-set editor).
     match /settings/{settingId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
-    // Calendar bookings & slot locks
+    // Calendar bookings & slot locks. Each doc carries the client's name/
+    // phone/email, so any read of more than "does this exact id exist" is
+    // admin-only. Nothing in the current app reads a single booking by id
+    // either, so both get and list are locked down. The public booking flow
+    // only ever creates a fresh slot lock, never edits or removes one - and
+    // getAvailableSlots runs server-side with the Admin SDK, which always
+    // bypasses these rules regardless.
     match /bookings/{bookingId} {
-      allow read, write: if true;
+      allow get, list: if isAdmin();
+      allow create: if request.resource.data.startIso is string
+                    && request.resource.data.endIso is string;
+      allow update, delete: if isAdmin();
     }
   }
 }
