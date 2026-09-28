@@ -20,6 +20,14 @@
         "destination": "/book.html"
       },
       {
+        "source": "/en/prep",
+        "destination": "/en/prep.html"
+      },
+      {
+        "source": "/en/book",
+        "destination": "/en/book.html"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
