@@ -1,0 +1,92 @@
+/*
+ * LTR layout fixes for the English pages (public/en/index.html, prep.html, book.html).
+ *
+ * The base stylesheets (styles.css, prep.css, book.css) are written RTL-first
+ * for the Hebrew site. Most two-column grid/flex layouts (hero-grid,
+ * exec-matrix-grid, week/day rows, etc.) automatically mirror correctly when
+ * the page's `dir` attribute switches from rtl to ltr, because CSS Grid and
+ * Flexbox placement follows the container's direction. This file only
+ * overrides the handful of rules that hardcode a physical side (text-align,
+ * absolute left/right positioning, one-sided borders) instead of a logical
+ * one, so they read correctly for an LTR, English-reading visitor.
+ *
+ * Load this AFTER the page's base stylesheet.
+ */
+
+html {
+  direction: ltr;
+}
+
+body {
+  direction: ltr;
+  text-align: left;
+}
+
+/* ---- index.html (styles.css) ---- */
+
+.hero-content {
+  text-align: left;
+}
+
+/* Divider between the two exec-matrix columns: client-col was the
+   rightmost column in RTL with a left border facing the advisor column.
+   In LTR it becomes the leftmost column, so the divider moves to its
+   right edge instead. */
+.exec-col.client-col {
+  border-left: none;
+  border-right: 1px solid var(--color-slate-200);
+}
+
+.form-lead-notice {
+  text-align: left;
+}
+
+.form-group {
+  text-align: left;
+}
+
+/* Footer: footer-brand and footer-meta sit at opposite ends of a
+   space-between row. footer-meta was flush against the RTL page's left
+   edge; in LTR it now sits at the right edge instead. */
+.footer-meta {
+  text-align: right;
+}
+
+/* Modal close (X) button: top-left in RTL (the "away from reading start"
+   corner), conventionally top-right for LTR readers. */
+.modal-close {
+  left: auto;
+  right: 12px;
+}
+
+/* Floating WhatsApp/phone dock: bottom-left in RTL, bottom-right for LTR
+   (also the near-universal placement for this kind of floating dock). */
+.floating-contact-dock {
+  left: auto;
+  right: 26px;
+}
+
+@media (max-width: 768px) {
+  .floating-contact-dock {
+    left: auto;
+    right: 18px;
+  }
+}
+
+@media (max-width: 960px) {
+  .fluid-step-card {
+    text-align: left;
+  }
+}
+
+/* ---- book.html (book.css) ---- */
+
+.meeting-summary-box {
+  text-align: left;
+}
+
+@media (max-width: 680px) {
+  .slot-card {
+    text-align: left;
+  }
+}

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pre-Call Questionnaire | Guy Hadas</title>
+  <meta name="description" content="A short prep questionnaire ahead of your personal call with Guy Hadas">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800;900&family=Assistant:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/prep.css?v=1.0.0">
+  <link rel="stylesheet" href="/ltr-fixes.css?v=1.0.0">
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="prep-header">
+    <div class="prep-container header-inner">
+      <a href="/en/" class="brand-logo">
+        <span class="brand-name">Guy Hadas</span>
+        <span class="brand-sub">Business Process & Operations Optimization</span>
+      </a>
+      <div class="nda-badge">
+        <span>🔒 100% Discretion Under NDA</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="prep-container main-wrapper">
+
+    <!-- Hero / Intro Card -->
+    <div class="intro-card" id="intro-card">
+      <div class="intro-icon">📝</div>
+      <h1 class="intro-title" id="intro-greeting">Pre-Call Questionnaire</h1>
+      <p class="intro-desc" id="intro-subtext">
+        I'll keep this short since I know you're busy. Please answer as many questions as you can, with as much detail as you can — it'll let me get straight to the point with you from the first minutes of our call.
+      </p>
+      <div class="step-indicator-pill">
+        <span>Step 1 of 2: Fill out the questionnaire → Step 2: Pick a time on the calendar</span>
+      </div>
+    </div>
+
+    <!-- Questionnaire Form Card -->
+    <div class="form-card" id="form-card">
+      <div id="loading-questions" class="loading-state">
+        <div class="spinner"></div>
+        <p>Loading the questionnaire...</p>
+      </div>
+
+      <form id="intake-form" class="intake-form hidden">
+
+        <!-- Contact Verification (Only shown if no leadId in URL) -->
+        <div id="contact-fields" class="contact-fields hidden">
+          <div class="form-group">
+            <label for="client-name">Full Name <span class="req">*</span></label>
+            <input type="text" id="client-name" placeholder="John Smith">
+          </div>
+          <div class="form-group">
+            <label for="client-phone">Phone <span class="req">*</span></label>
+            <input type="tel" id="client-phone" placeholder="+1 555-000-0000" dir="ltr">
+          </div>
+        </div>
+
+        <!-- Dynamic Questions Render Container -->
+        <div id="questions-container" class="questions-container">
+          <!-- Questions injected by prep-en.js -->
+        </div>
+
+        <!-- Submit Button -->
+        <div class="form-submit-area">
+          <button type="submit" id="submit-prep-btn" class="btn btn-primary btn-lg btn-block">
+            <span>Submit & Continue to Scheduling</span>
+          </button>
+          <p class="privacy-note">
+            🔒 All information is kept fully confidential and will only be used to prepare for our personal call.
+          </p>
+        </div>
+      </form>
+    </div>
+
+    <!-- Success Screen (Shown after submit) -->
+    <div id="success-screen" class="success-card hidden">
+      <div class="success-icon">✓</div>
+      <h2 class="success-title">Your answers were received successfully!</h2>
+      <p class="success-desc">
+        Thank you, <span id="success-name"></span>. I've got your information and I'm reviewing it ahead of our call.
+      </p>
+      <div class="next-steps-box">
+        <strong>What's next?</strong>
+        <p>Taking you now to pick a convenient time on the calendar...</p>
+      </div>
+      <a href="/en/" class="btn btn-outline">Back to the Main Site</a>
+    </div>
+
+  </main>
+
+  <footer class="prep-footer">
+    <div class="prep-container">
+      <p>© All rights reserved, Guy Hadas | Full discretion under NDA | <a href="/prep.html" title="עברית">עברית</a></p>
+    </div>
+  </footer>
+
+  <script type="module" src="prep-en.js?v=1.0.0"></script>
+</body>
+</html>
