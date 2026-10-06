@@ -111,10 +111,36 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // metrics / aiVisibilitySnapshots / competitors / keywords / topics /
-    // contentAssets / experiments / expertKnowledge / recommendations are
-    // not yet read or written by any client - left to the blanket
-    // default-deny above until a later milestone actually introduces them,
-    // same as everywhere else in this file.
+    // --- Search Universe & Qualification (roadmap Milestone 3) ---
+    // Discovery → Filtering → Normalization → Owner Validation → Approved
+    // Search Universe. Unlike integrations/trafficSnapshots/searchSnapshots
+    // above, these four ARE client-writable by the admin: owner validation
+    // (approve/reject/prioritize/brand-strategic/unsure, manual topic/
+    // keyword add, business-knowledge entries like exclusion rules) is a
+    // direct Firestore write from the Topics tab, not a Cloud Function call.
+    // The three discovery functions (visibilityDiscoverFromSearchConsole/
+    // Website/Semrush, functions/searchUniverse.js) also write here, using
+    // the Admin SDK, which bypasses these rules regardless.
+
+    match /businessKnowledge/{knowledgeId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /searchTopics/{topicId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /keywords/{keywordId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /competitors/{competitorId} {
+      allow read, write: if isAdmin();
+    }
+
+    // metrics / aiVisibilitySnapshots / contentAssets / experiments /
+    // recommendations are not yet read or written by any client - left to
+    // the blanket default-deny above until a later milestone actually
+    // introduces them, same as everywhere else in this file.
   }
 }

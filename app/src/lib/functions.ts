@@ -78,3 +78,32 @@ export async function syncSearchConsole(businessId: string): Promise<SearchConso
   const res = await callFunction<{ data: SearchConsoleSnapshotData }>("visibilitySyncSearchConsole", { businessId });
   return res.data;
 }
+
+// --- Search Universe discovery (functions/searchUniverse.js) ---
+// Each call runs Discovery + automatic Filtering + Normalization server-side
+// and writes straight into searchTopics/keywords/competitors (see
+// firestore.rules) - Owner Validation then happens as plain client writes
+// to those same collections (see the search-topic functions below), not
+// through another Cloud Function call.
+
+export interface DiscoveryResult {
+  discovered: number;
+  topicsCreated: number;
+  topicsMerged: number;
+  excluded: number;
+  refreshed: number;
+  competitorsFound?: number;
+  pagesScanned?: number;
+}
+
+export function discoverFromSearchConsole(businessId: string): Promise<DiscoveryResult> {
+  return callFunction<DiscoveryResult>("visibilityDiscoverFromSearchConsole", { businessId });
+}
+
+export function discoverFromWebsite(businessId: string): Promise<DiscoveryResult> {
+  return callFunction<DiscoveryResult>("visibilityDiscoverFromWebsite", { businessId });
+}
+
+export function discoverFromSemrush(businessId: string, seedPhrase: string, database?: string): Promise<DiscoveryResult> {
+  return callFunction<DiscoveryResult>("visibilityDiscoverFromSemrush", { businessId, seedPhrase, database });
+}

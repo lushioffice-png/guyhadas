@@ -9,6 +9,7 @@ import BusinessOpportunities from "./pages/business/BusinessOpportunities";
 import BusinessIntegrations from "./pages/business/BusinessIntegrations";
 import BusinessTraffic from "./pages/business/BusinessTraffic";
 import BusinessSearch from "./pages/business/BusinessSearch";
+import BusinessTopics from "./pages/business/BusinessTopics";
 import ComingNext from "./pages/business/ComingNext";
 
 export default function App() {
@@ -23,6 +24,7 @@ export default function App() {
         element={<ProtectedRoute><BusinessWorkspace /></ProtectedRoute>}
       >
         <Route index element={<BusinessOverview />} />
+        <Route path="topics" element={<BusinessTopics />} />
         <Route path="tasks" element={<BusinessTasks />} />
         <Route path="opportunities" element={<BusinessOpportunities />} />
         <Route path="integrations" element={<BusinessIntegrations />} />
