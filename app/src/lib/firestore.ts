@@ -13,7 +13,19 @@ import {
   type Unsubscribe
 } from "firebase/firestore";
 import { db } from "../firebase";
-import type { Business, Task, Opportunity, Integration, TrafficSnapshot, SearchSnapshot } from "../types";
+import type {
+  Business,
+  Task,
+  Opportunity,
+  Integration,
+  TrafficSnapshot,
+  SearchSnapshot,
+  BusinessKnowledge,
+  SearchTopic,
+  TopicStatus,
+  Keyword,
+  Competitor
+} from "../types";
 
 // How much history the Traffic/Search trend charts load. Milestone 3's
 // scheduled sync adds roughly one snapshot per business per day, so 90
@@ -165,4 +177,136 @@ export function listenSearchSnapshots(businessId: string, cb: (snapshots: Search
   return onSnapshot(q, (snap) => {
     cb(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<SearchSnapshot, "id">) })));
   });
+}
+
+// --- Search Universe & Qualification (roadmap Milestone 3) ---
+// Discovery itself (populating searchTopics/keywords/competitors) runs
+// server-side - see lib/functions.ts's discoverFromSearchConsole/Website/
+// Semrush. Everything here is Owner Validation: the owner reading what was
+// discovered and approving/rejecting/prioritizing/marking brand-strategic/
+// leaving unsure/manually adding - all plain client writes, matching
+// firestore.rules (admin read+write on all four collections).
+
+// --- Business Knowledge ("what the system knows/learns about the
+// business" - see types.ts for why this is separate from `businesses`) ---
+
+export function listenBusinessKnowledge(businessId: string, cb: (items: BusinessKnowledge[]) => void): Unsubscribe {
+  const q = query(collection(db, "businessKnowledge"), where("businessId", "==", businessId));
+  return onSnapshot(q, (snap) => {
+    const items = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<BusinessKnowledge, "id">) }));
+    items.sort((a, b) => {
+      const ta = (a.createdAt as { toMillis?: () => number })?.toMillis?.() ?? 0;
+      const tb = (b.createdAt as { toMillis?: () => number })?.toMillis?.() ?? 0;
+      return tb - ta;
+    });
+    cb(items);
+  });
+}
+
+// Owner-authored knowledge only (source: "owner", confidence: "observed") -
+// the system itself doesn't write discovered_fact/learned_insight entries
+// until a later milestone (see types.ts).
+export async function createBusinessKnowledge(
+  data: Omit<BusinessKnowledge, "id" | "source" | "confidence" | "createdAt" | "updatedAt">
+) {
+  return addDoc(collection(db, "businessKnowledge"), {
+    ...data,
+    source: "owner",
+    confidence: "observed",
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function deleteBusinessKnowledge(id: string) {
+  return deleteDoc(doc(db, "businessKnowledge", id));
+}
+
+// --- Search Topics ---
+
+export function listenSearchTopics(businessId: string, cb: (topics: SearchTopic[]) => void): Unsubscribe {
+  const q = query(collection(db, "searchTopics"), where("businessId", "==", businessId));
+  return onSnapshot(q, (snap) => {
+    const topics = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<SearchTopic, "id">) }));
+    topics.sort((a, b) => {
+      const ta = (a.updatedAt as { toMillis?: () => number })?.toMillis?.() ?? 0;
+      const tb = (b.updatedAt as { toMillis?: () => number })?.toMillis?.() ?? 0;
+      return tb - ta;
+    });
+    cb(topics);
+  });
+}
+
+// The five owner decisions (relevant/priority/brand_strategic/exclude/
+// unsure) plus moving a topic back to "new" - always a plain status+notes
+// update, never a volume-based filter: manual/strategic topics must stay
+// valid regardless of search volume (spec requirement), which this
+// satisfies simply by never looking at volume here at all.
+export async function updateSearchTopicStatus(id: string, status: TopicStatus, notes?: string) {
+  return updateDoc(doc(db, "searchTopics", id), {
+    status,
+    ...(notes !== undefined ? { notes } : {}),
+    updatedAt: serverTimestamp()
+  });
+}
+
+// Manual topic/keyword add (source: "manual", addedBy: "owner") - the
+// owner's own provenance tag, distinct from anything a discovery function
+// would write. Defaults straight to "relevant" rather than "new", since the
+// owner typing it in is itself the validation step.
+export async function createManualTopic(businessId: string, title: string, notes?: string) {
+  const topicRef = await addDoc(collection(db, "searchTopics"), {
+    businessId,
+    title,
+    queries: [title],
+    status: "relevant",
+    source: "manual",
+    addedBy: "owner",
+    notes: notes || "",
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  });
+  await addDoc(collection(db, "keywords"), {
+    businessId,
+    topicId: topicRef.id,
+    query: title,
+    source: "manual",
+    sourceProperty: null,
+    volume: null,
+    difficulty: null,
+    metrics: null,
+    discoveredAt: serverTimestamp()
+  });
+  return topicRef;
+}
+
+export function listenKeywordsForTopic(topicId: string, cb: (keywords: Keyword[]) => void): Unsubscribe {
+  const q = query(collection(db, "keywords"), where("topicId", "==", topicId));
+  return onSnapshot(q, (snap) => {
+    cb(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Keyword, "id">) })));
+  });
+}
+
+// --- Competitors ---
+
+export function listenCompetitors(businessId: string, cb: (items: Competitor[]) => void): Unsubscribe {
+  const q = query(collection(db, "competitors"), where("businessId", "==", businessId));
+  return onSnapshot(q, (snap) => {
+    cb(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Competitor, "id">) })));
+  });
+}
+
+export async function addManualCompetitor(businessId: string, domain: string) {
+  return addDoc(collection(db, "competitors"), {
+    businessId,
+    domain,
+    discoveredVia: "manual",
+    relevanceScore: null,
+    sharedKeywordCount: null,
+    addedAt: serverTimestamp()
+  });
+}
+
+export async function deleteCompetitor(id: string) {
+  return deleteDoc(doc(db, "competitors", id));
 }

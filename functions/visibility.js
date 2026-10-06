@@ -479,3 +479,12 @@ exports.visibilityDailySync = functions
     console.log(`visibilityDailySync complete: ${succeeded} succeeded, ${failed} failed`);
     return null;
   });
+
+// Shared with functions/searchUniverse.js (GSC discovery reuses the same
+// service account, ID-token check and CORS setup as everything above) -
+// plain exported functions, not Cloud Functions themselves, so Firebase's
+// deploy step ignores them when it scans this file's exports for triggers.
+exports.setCors = setCors;
+exports.requireAdmin = requireAdmin;
+exports.getVisibilityAuth = getVisibilityAuth;
+exports.markIntegrationError = markIntegrationError;

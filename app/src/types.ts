@@ -165,3 +165,115 @@ export const INTEGRATION_LABELS: Record<IntegrationProvider, string> = {
   xai: "xAI / Grok",
   n8n: "n8n"
 };
+
+// --- Search Universe & Qualification (roadmap Milestone 3) ---
+// Discovery → Filtering → Normalization → Owner Validation → Approved
+// Search Universe. See functions/searchUniverse.js for the discovery/
+// filtering/normalization pipeline that writes these, and
+// claude/visibility-os-search-universe-plan.md (project docs) for the
+// reasoning behind this shape.
+
+// "What the system knows/learns about the business" - distinct from
+// `businesses`, which is "what the business is" (the static profile from
+// Milestone 1). Owner-entered entries (exclusion_rule, strategic_priority,
+// brand_terminology, business_rule) are source="owner", confidence=
+// "observed" - a direct statement from the person who knows. System-entered
+// entries (discovered_fact, learned_insight) aren't written by this
+// milestone yet (that starts in M4/M9) but the shape supports them now so
+// nothing needs to migrate later: confidence distinguishes a directly
+// measured fact ("observed") from a system judgment/pattern ("inferred").
+export type KnowledgeType =
+  | "exclusion_rule"
+  | "strategic_priority"
+  | "brand_terminology"
+  | "business_rule"
+  | "discovered_fact"
+  | "learned_insight";
+export type KnowledgeSource = "owner" | "system";
+export type KnowledgeConfidence = "observed" | "inferred";
+
+export interface BusinessKnowledge {
+  id: string;
+  businessId: string;
+  type: KnowledgeType;
+  content: string;
+  source: KnowledgeSource;
+  confidence: KnowledgeConfidence;
+  relatedTopicId?: string | null;
+  createdAt: unknown;
+  updatedAt: unknown;
+}
+
+// "new" is this app's own addition, not one of the roadmap's five owner
+// decisions (Relevant / Priority / Brand-Strategic / Exclude / Unsure) -
+// every discovered topic starts here until the owner (or, for an obvious
+// exclusion-rule match, automatic filtering) moves it to one of those five.
+export type TopicStatus = "new" | "relevant" | "priority" | "brand_strategic" | "exclude" | "unsure";
+export type DiscoverySource = "semrush" | "gsc" | "website" | "competitor" | "manual";
+
+export interface SearchTopic {
+  id: string;
+  businessId: string;
+  title: string;
+  queries: string[]; // underlying raw queries grouped into this topic - retained per spec 3.4
+  status: TopicStatus;
+  source: DiscoverySource;
+  addedBy: "system" | "owner";
+  notes?: string;
+  createdAt: unknown;
+  updatedAt: unknown;
+}
+
+// One row per raw discovered phrase, independent of topic grouping - this
+// is the provenance record spec 3.2 asks for ("preserve provenance for
+// every discovery"). Not read back by the UI this milestone (a topic's own
+// `queries` array is enough to display it) - exists for history/audit and
+// for richer per-query data (volume/difficulty trends) later.
+export interface Keyword {
+  id: string;
+  businessId: string;
+  topicId: string | null;
+  query: string;
+  source: DiscoverySource;
+  sourceProperty?: string | null;
+  volume?: number | null;
+  difficulty?: number | null;
+  metrics?: { impressions?: number; clicks?: number; position?: number } | null;
+  discoveredAt: unknown;
+}
+
+export interface Competitor {
+  id: string;
+  businessId: string;
+  domain: string;
+  discoveredVia: "semrush" | "manual";
+  relevanceScore?: number | null;
+  sharedKeywordCount?: number | null;
+  addedAt: unknown;
+}
+
+export const TOPIC_STATUS_LABELS: Record<TopicStatus, string> = {
+  new: "חדש",
+  relevant: "רלוונטי",
+  priority: "עדיפות",
+  brand_strategic: "מותג / אסטרטגי",
+  exclude: "הוחרג",
+  unsure: "לא בטוח"
+};
+
+export const KNOWLEDGE_TYPE_LABELS: Record<KnowledgeType, string> = {
+  exclusion_rule: "כלל החרגה",
+  strategic_priority: "עדיפות אסטרטגית",
+  brand_terminology: "מינוח מותג",
+  business_rule: "כלל עסקי",
+  discovered_fact: "עובדה שהתגלתה",
+  learned_insight: "תובנה שנלמדה"
+};
+
+export const DISCOVERY_SOURCE_LABELS: Record<DiscoverySource, string> = {
+  semrush: "Semrush",
+  gsc: "Search Console",
+  website: "סריקת אתר",
+  competitor: "מתחרה",
+  manual: "ידני"
+};
