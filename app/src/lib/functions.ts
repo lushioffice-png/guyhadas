@@ -1,4 +1,5 @@
 import { auth } from "../firebase";
+import type { Ga4SnapshotData, SearchConsoleSnapshotData } from "../types";
 
 // Thin wrapper around the Visibility OS Cloud Functions (functions/visibility.js,
 // Milestone 2+). Same deployment shape as the existing public-site functions
@@ -63,25 +64,14 @@ export function disconnectIntegration(businessId: string, provider: "ga4" | "sea
   return callFunction<void>("visibilityDisconnectIntegration", { businessId, provider });
 }
 
-export interface Ga4SnapshotData {
-  sessions: number;
-  totalUsers: number;
-  conversions: number;
-  engagementRate: number;
-  byChannel: { channel: string; sessions: number }[];
-}
+// Ga4SnapshotData / SearchConsoleSnapshotData live in types.ts - they're the
+// same shape functions/visibility.js writes into trafficSnapshots/
+// searchSnapshots, which the Traffic/Search tabs read back directly from
+// Firestore (see lib/firestore.ts), so there's one definition, not two.
 
 export async function syncGa4(businessId: string): Promise<Ga4SnapshotData> {
   const res = await callFunction<{ data: Ga4SnapshotData }>("visibilitySyncGa4", { businessId });
   return res.data;
-}
-
-export interface SearchConsoleSnapshotData {
-  clicks: number;
-  impressions: number;
-  ctr: number;
-  avgPosition: number;
-  topQueries: { query: string; clicks: number; impressions: number; ctr: number; position: number }[];
 }
 
 export async function syncSearchConsole(businessId: string): Promise<SearchConsoleSnapshotData> {

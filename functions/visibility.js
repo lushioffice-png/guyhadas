@@ -1,8 +1,9 @@
-// GuyHadas Visibility OS - Milestone 2: Google data connections.
+// GuyHadas Visibility OS - Milestone 2+3: Google data connections and
+// historical ingestion.
 //
 // Unlike the pre-existing calendar/email functions in index.js (which are
 // only reachable by client code that already knows the right shape and are
-// otherwise unauthenticated), every function here requires a verified
+// otherwise unauthenticated), every HTTP function here requires a verified
 // Firebase ID token from the caller, checked against the same admin
 // allowlist as firestore.rules' isAdmin() - per the spec's explicit
 // requirement to keep Google credentials server-side with ID token
@@ -18,6 +19,13 @@
 // (Viewer access) the same way he'd share a Google Doc - no OAuth consent
 // screen, no refresh-token storage. See the Milestone 2 deliverable doc for
 // the exact manual setup steps.
+//
+// Milestone 3 adds `visibilityDailySync`, a scheduled function that runs the
+// same ingestion logic for every connected business once a day - this is
+// what turns a single manual "sync now" into the historical time series the
+// spec calls a core architectural requirement. The HTTP sync endpoints and
+// the scheduled job share the same fetch*Snapshot() functions so there is
+// exactly one place that talks to each Google API.
 
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
@@ -85,6 +93,138 @@ async function markIntegrationError(businessId, provider, message) {
   } catch (err) {
     console.error("Failed to record integration error state:", err.message);
   }
+}
+
+// --- Shared ingestion logic -------------------------------------------
+// Each of these does one Google API call, writes one normalized snapshot
+// doc, and updates the integration's lastSyncedAt/status. Used by both the
+// on-demand HTTP endpoints below and the daily scheduled sync.
+
+async function fetchGa4Snapshot(businessId, propertyId) {
+  const db = admin.firestore();
+  const auth = getVisibilityAuth(["https://www.googleapis.com/auth/analytics.readonly"]);
+  const analyticsData = google.analyticsdata({ version: "v1beta", auth });
+  const dateRange = { startDate: "28daysAgo", endDate: "today" };
+
+  const { data } = await analyticsData.properties.runReport({
+    property: propertyId,
+    requestBody: {
+      dateRanges: [dateRange],
+      metrics: [
+        { name: "sessions" },
+        { name: "totalUsers" },
+        { name: "conversions" },
+        { name: "engagementRate" }
+      ],
+      dimensions: [{ name: "sessionDefaultChannelGroup" }]
+    }
+  });
+
+  let sessions = 0;
+  let totalUsers = 0;
+  let conversions = 0;
+  let engagementWeighted = 0;
+  const byChannel = [];
+
+  for (const row of data.rows || []) {
+    const channel = row.dimensionValues?.[0]?.value || "(unknown)";
+    const rowSessions = Number(row.metricValues?.[0]?.value || 0);
+    const rowUsers = Number(row.metricValues?.[1]?.value || 0);
+    const rowConversions = Number(row.metricValues?.[2]?.value || 0);
+    const rowEngagement = Number(row.metricValues?.[3]?.value || 0);
+    sessions += rowSessions;
+    totalUsers += rowUsers;
+    conversions += rowConversions;
+    engagementWeighted += rowEngagement * rowSessions;
+    byChannel.push({ channel, sessions: rowSessions });
+  }
+  byChannel.sort((a, b) => b.sessions - a.sessions);
+
+  const snapshotData = {
+    sessions,
+    totalUsers,
+    conversions,
+    engagementRate: sessions > 0 ? engagementWeighted / sessions : 0,
+    byChannel: byChannel.slice(0, 10)
+  };
+  const retrievedAt = admin.firestore.FieldValue.serverTimestamp();
+
+  await db.collection("trafficSnapshots").add({
+    businessId,
+    source: "ga4",
+    sourceProperty: propertyId,
+    retrievedAt,
+    dateRange,
+    data: snapshotData
+  });
+  await db.collection("integrations").doc(`${businessId}_ga4`).set(
+    { lastSyncedAt: retrievedAt, status: "connected", errorMessage: null },
+    { merge: true }
+  );
+
+  return snapshotData;
+}
+
+async function fetchSearchConsoleSnapshot(businessId, propertyId) {
+  const db = admin.firestore();
+  const auth = getVisibilityAuth(["https://www.googleapis.com/auth/webmasters.readonly"]);
+  const searchconsole = google.searchconsole({ version: "v1", auth });
+
+  const end = new Date();
+  const start = new Date(end.getTime() - 28 * 24 * 60 * 60 * 1000);
+  const dateRange = {
+    startDate: start.toISOString().slice(0, 10),
+    endDate: end.toISOString().slice(0, 10)
+  };
+
+  const [totalsRes, queriesRes] = await Promise.all([
+    searchconsole.searchanalytics.query({
+      siteUrl: propertyId,
+      requestBody: { startDate: dateRange.startDate, endDate: dateRange.endDate }
+    }),
+    searchconsole.searchanalytics.query({
+      siteUrl: propertyId,
+      requestBody: {
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+        dimensions: ["query"],
+        rowLimit: 20
+      }
+    })
+  ]);
+
+  const totalsRow = totalsRes.data.rows?.[0] || {};
+  const topQueries = (queriesRes.data.rows || []).map((r) => ({
+    query: r.keys?.[0] || "",
+    clicks: r.clicks || 0,
+    impressions: r.impressions || 0,
+    ctr: r.ctr || 0,
+    position: r.position || 0
+  }));
+
+  const snapshotData = {
+    clicks: totalsRow.clicks || 0,
+    impressions: totalsRow.impressions || 0,
+    ctr: totalsRow.ctr || 0,
+    avgPosition: totalsRow.position || 0,
+    topQueries
+  };
+  const retrievedAt = admin.firestore.FieldValue.serverTimestamp();
+
+  await db.collection("searchSnapshots").add({
+    businessId,
+    source: "search_console",
+    sourceProperty: propertyId,
+    retrievedAt,
+    dateRange,
+    data: snapshotData
+  });
+  await db.collection("integrations").doc(`${businessId}_search_console`).set(
+    { lastSyncedAt: retrievedAt, status: "connected", errorMessage: null },
+    { merge: true }
+  );
+
+  return snapshotData;
 }
 
 // --- Discovery: which properties can the service account see? ---
@@ -233,12 +373,10 @@ exports.visibilityDisconnectIntegration = functions.https.onRequest(async (req, 
   }
 });
 
-// --- Ingestion: pull current data and store a normalized snapshot ---
-// Milestone 2 scope is "real ingestion, normalized storage" for the current
-// period only. Historical backfill, baseline-setting and date-range
-// comparisons are Milestone 3 - these snapshots are exactly the provenance
-// shape that work will build on (businessId, source, sourceProperty,
-// retrievedAt, dateRange, data).
+// --- On-demand ingestion (HTTP) ---
+// Milestone 2 scope: "real ingestion, normalized storage" triggered by a
+// person clicking "sync now". Milestone 3 adds visibilityDailySync below,
+// which calls the same fetch*Snapshot() functions automatically.
 
 exports.visibilitySyncGa4 = functions
   .runWith({ secrets: ["VISIBILITY_GOOGLE_SA_KEY"] })
@@ -258,74 +396,12 @@ exports.visibilitySyncGa4 = functions
     }
 
     try {
-      const db = admin.firestore();
-      const integDoc = await db.collection("integrations").doc(`${businessId}_ga4`).get();
+      const integDoc = await admin.firestore().collection("integrations").doc(`${businessId}_ga4`).get();
       if (!integDoc.exists || integDoc.data().status === "not_connected") {
         res.status(400).json({ success: false, error: "GA4 is not connected for this business" });
         return;
       }
-      const { propertyId } = integDoc.data();
-
-      const auth = getVisibilityAuth(["https://www.googleapis.com/auth/analytics.readonly"]);
-      const analyticsData = google.analyticsdata({ version: "v1beta", auth });
-      const dateRange = { startDate: "28daysAgo", endDate: "today" };
-
-      const { data } = await analyticsData.properties.runReport({
-        property: propertyId,
-        requestBody: {
-          dateRanges: [dateRange],
-          metrics: [
-            { name: "sessions" },
-            { name: "totalUsers" },
-            { name: "conversions" },
-            { name: "engagementRate" }
-          ],
-          dimensions: [{ name: "sessionDefaultChannelGroup" }]
-        }
-      });
-
-      let sessions = 0;
-      let totalUsers = 0;
-      let conversions = 0;
-      let engagementWeighted = 0;
-      const byChannel = [];
-
-      for (const row of data.rows || []) {
-        const channel = row.dimensionValues?.[0]?.value || "(unknown)";
-        const rowSessions = Number(row.metricValues?.[0]?.value || 0);
-        const rowUsers = Number(row.metricValues?.[1]?.value || 0);
-        const rowConversions = Number(row.metricValues?.[2]?.value || 0);
-        const rowEngagement = Number(row.metricValues?.[3]?.value || 0);
-        sessions += rowSessions;
-        totalUsers += rowUsers;
-        conversions += rowConversions;
-        engagementWeighted += rowEngagement * rowSessions;
-        byChannel.push({ channel, sessions: rowSessions });
-      }
-      byChannel.sort((a, b) => b.sessions - a.sessions);
-
-      const snapshotData = {
-        sessions,
-        totalUsers,
-        conversions,
-        engagementRate: sessions > 0 ? engagementWeighted / sessions : 0,
-        byChannel: byChannel.slice(0, 10)
-      };
-      const retrievedAt = admin.firestore.FieldValue.serverTimestamp();
-
-      await db.collection("trafficSnapshots").add({
-        businessId,
-        source: "ga4",
-        sourceProperty: propertyId,
-        retrievedAt,
-        dateRange,
-        data: snapshotData
-      });
-      await db.collection("integrations").doc(`${businessId}_ga4`).set(
-        { lastSyncedAt: retrievedAt, status: "connected", errorMessage: null },
-        { merge: true }
-      );
-
+      const snapshotData = await fetchGa4Snapshot(businessId, integDoc.data().propertyId);
       res.status(200).json({ success: true, data: snapshotData });
     } catch (err) {
       console.error("visibilitySyncGa4 error:", err.message);
@@ -352,75 +428,54 @@ exports.visibilitySyncSearchConsole = functions
     }
 
     try {
-      const db = admin.firestore();
-      const integDoc = await db.collection("integrations").doc(`${businessId}_search_console`).get();
+      const integDoc = await admin.firestore().collection("integrations").doc(`${businessId}_search_console`).get();
       if (!integDoc.exists || integDoc.data().status === "not_connected") {
         res.status(400).json({ success: false, error: "Search Console is not connected for this business" });
         return;
       }
-      const { propertyId } = integDoc.data();
-
-      const auth = getVisibilityAuth(["https://www.googleapis.com/auth/webmasters.readonly"]);
-      const searchconsole = google.searchconsole({ version: "v1", auth });
-
-      const end = new Date();
-      const start = new Date(end.getTime() - 28 * 24 * 60 * 60 * 1000);
-      const dateRange = {
-        startDate: start.toISOString().slice(0, 10),
-        endDate: end.toISOString().slice(0, 10)
-      };
-
-      const [totalsRes, queriesRes] = await Promise.all([
-        searchconsole.searchanalytics.query({
-          siteUrl: propertyId,
-          requestBody: { startDate: dateRange.startDate, endDate: dateRange.endDate }
-        }),
-        searchconsole.searchanalytics.query({
-          siteUrl: propertyId,
-          requestBody: {
-            startDate: dateRange.startDate,
-            endDate: dateRange.endDate,
-            dimensions: ["query"],
-            rowLimit: 20
-          }
-        })
-      ]);
-
-      const totalsRow = totalsRes.data.rows?.[0] || {};
-      const topQueries = (queriesRes.data.rows || []).map((r) => ({
-        query: r.keys?.[0] || "",
-        clicks: r.clicks || 0,
-        impressions: r.impressions || 0,
-        ctr: r.ctr || 0,
-        position: r.position || 0
-      }));
-
-      const snapshotData = {
-        clicks: totalsRow.clicks || 0,
-        impressions: totalsRow.impressions || 0,
-        ctr: totalsRow.ctr || 0,
-        avgPosition: totalsRow.position || 0,
-        topQueries
-      };
-      const retrievedAt = admin.firestore.FieldValue.serverTimestamp();
-
-      await db.collection("searchSnapshots").add({
-        businessId,
-        source: "search_console",
-        sourceProperty: propertyId,
-        retrievedAt,
-        dateRange,
-        data: snapshotData
-      });
-      await db.collection("integrations").doc(`${businessId}_search_console`).set(
-        { lastSyncedAt: retrievedAt, status: "connected", errorMessage: null },
-        { merge: true }
-      );
-
+      const snapshotData = await fetchSearchConsoleSnapshot(businessId, integDoc.data().propertyId);
       res.status(200).json({ success: true, data: snapshotData });
     } catch (err) {
       console.error("visibilitySyncSearchConsole error:", err.message);
       await markIntegrationError(businessId, "search_console", err.message);
       res.status(500).json({ success: false, error: err.message });
     }
+  });
+
+// --- Scheduled daily ingestion (Milestone 3) ---
+// Runs once a day for every business with a connected GA4 and/or Search
+// Console integration, building the historical time series the dashboard's
+// trend charts and baseline comparisons read. One business failing (e.g. a
+// revoked share) never blocks the others - each is caught and recorded on
+// that business's own integration doc via markIntegrationError.
+exports.visibilityDailySync = functions
+  .runWith({ secrets: ["VISIBILITY_GOOGLE_SA_KEY"] })
+  .pubsub.schedule("every 24 hours")
+  .onRun(async () => {
+    const db = admin.firestore();
+    const snap = await db.collection("integrations").where("status", "==", "connected").get();
+
+    let succeeded = 0;
+    let failed = 0;
+
+    for (const doc of snap.docs) {
+      const { businessId, provider, propertyId } = doc.data();
+      if (!businessId || !propertyId) continue;
+      try {
+        if (provider === "ga4") {
+          await fetchGa4Snapshot(businessId, propertyId);
+          succeeded++;
+        } else if (provider === "search_console") {
+          await fetchSearchConsoleSnapshot(businessId, propertyId);
+          succeeded++;
+        }
+      } catch (err) {
+        console.error(`visibilityDailySync failed for ${businessId}/${provider}:`, err.message);
+        await markIntegrationError(businessId, provider, err.message);
+        failed++;
+      }
+    }
+
+    console.log(`visibilityDailySync complete: ${succeeded} succeeded, ${failed} failed`);
+    return null;
   });

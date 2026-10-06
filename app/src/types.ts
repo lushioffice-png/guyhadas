@@ -109,6 +109,53 @@ export const PRIORITY_LABELS: Record<TaskPriority, string> = {
   high: "גבוהה"
 };
 
+// --- Historical snapshots (Milestone 3) ---
+// Written only by the visibilitySyncGa4 / visibilitySyncSearchConsole /
+// visibilityDailySync Cloud Functions (functions/visibility.js) - this is
+// the read-only shape the Traffic/Search tabs chart and compare against the
+// business's baselineDate.
+
+export interface DateRange {
+  startDate: string;
+  endDate: string;
+}
+
+export interface Ga4SnapshotData {
+  sessions: number;
+  totalUsers: number;
+  conversions: number;
+  engagementRate: number;
+  byChannel: { channel: string; sessions: number }[];
+}
+
+export interface TrafficSnapshot {
+  id: string;
+  businessId: string;
+  source: "ga4";
+  sourceProperty: string;
+  retrievedAt: unknown; // Firestore Timestamp
+  dateRange: DateRange;
+  data: Ga4SnapshotData;
+}
+
+export interface SearchConsoleSnapshotData {
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  avgPosition: number;
+  topQueries: { query: string; clicks: number; impressions: number; ctr: number; position: number }[];
+}
+
+export interface SearchSnapshot {
+  id: string;
+  businessId: string;
+  source: "search_console";
+  sourceProperty: string;
+  retrievedAt: unknown; // Firestore Timestamp
+  dateRange: DateRange;
+  data: SearchConsoleSnapshotData;
+}
+
 export const INTEGRATION_LABELS: Record<IntegrationProvider, string> = {
   ga4: "Google Analytics 4",
   search_console: "Google Search Console",
