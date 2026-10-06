@@ -5,6 +5,12 @@ const { google } = require("googleapis");
 admin.initializeApp();
 const db = admin.firestore();
 
+// GuyHadas Visibility OS (app.guyhadas.xyz) - Milestone 2 Google data
+// connections. Kept in its own file since it's a separate app with its own
+// auth model (every function requires a verified Firebase ID token), not
+// because of the Calendar/email logic below, which stays untouched.
+Object.assign(exports, require("./visibility"));
+
 const GUY_CALENDAR_EMAIL = "mr.hadas@gmail.com";
 
 // --- JEWISH HOLIDAYS & EREV CHAG CALENDAR (2025 - 2028) ---
