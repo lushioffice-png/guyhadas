@@ -7,6 +7,8 @@ import BusinessOverview from "./pages/business/BusinessOverview";
 import BusinessTasks from "./pages/business/BusinessTasks";
 import BusinessOpportunities from "./pages/business/BusinessOpportunities";
 import BusinessIntegrations from "./pages/business/BusinessIntegrations";
+import BusinessTraffic from "./pages/business/BusinessTraffic";
+import BusinessSearch from "./pages/business/BusinessSearch";
 import ComingNext from "./pages/business/ComingNext";
 
 export default function App() {
@@ -24,17 +26,11 @@ export default function App() {
         <Route path="tasks" element={<BusinessTasks />} />
         <Route path="opportunities" element={<BusinessOpportunities />} />
         <Route path="integrations" element={<BusinessIntegrations />} />
-        <Route
-          path="search"
-          element={<ComingNext title="חיפוש" description="נתוני Google Search Console (שאילתות, עמודים, קליקים, חשיפות) יופיעו כאן לאחר Milestone 2." />}
-        />
-        <Route
-          path="traffic"
-          element={<ComingNext title="תנועה" description="נתוני Google Analytics 4 (משתמשים, סשנים, המרות) יופיעו כאן לאחר Milestone 2." />}
-        />
+        <Route path="search" element={<BusinessSearch />} />
+        <Route path="traffic" element={<BusinessTraffic />} />
         <Route
           path="ai-visibility"
-          element={<ComingNext title="נראות AI" description="מבנה נתונים ייבנה בשלב הבייסליין (Milestone 3); מנוע הניטור האוטומטי מתוכנן לשלב מאוחר יותר." />}
+          element={<ComingNext title="נראות AI" description="מנוע הניטור האוטומטי של נראות AI מתוכנן לשלב מאוחר יותר." />}
         />
         <Route
           path="competitors"

@@ -8,11 +8,17 @@ import {
   query,
   where,
   orderBy,
+  limit,
   serverTimestamp,
   type Unsubscribe
 } from "firebase/firestore";
 import { db } from "../firebase";
-import type { Business, Task, Opportunity, Integration } from "../types";
+import type { Business, Task, Opportunity, Integration, TrafficSnapshot, SearchSnapshot } from "../types";
+
+// How much history the Traffic/Search trend charts load. Milestone 3's
+// scheduled sync adds roughly one snapshot per business per day, so 90
+// covers about three months before this needs revisiting.
+const SNAPSHOT_HISTORY_LIMIT = 90;
 
 // Thin, typed wrappers around Firestore. No Cloud Functions in Milestone 1 -
 // access is enforced entirely by firestore.rules (ADMIN_EMAILS), same
@@ -132,5 +138,31 @@ export function listenAllIntegrations(cb: (items: Integration[]) => void): Unsub
   const q = query(collection(db, "integrations"));
   return onSnapshot(q, (snap) => {
     cb(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Integration, "id">) })));
+  });
+}
+
+// --- Historical snapshots (Milestone 3, read-only - see types.ts) ---
+
+export function listenTrafficSnapshots(businessId: string, cb: (snapshots: TrafficSnapshot[]) => void): Unsubscribe {
+  const q = query(
+    collection(db, "trafficSnapshots"),
+    where("businessId", "==", businessId),
+    orderBy("retrievedAt", "asc"),
+    limit(SNAPSHOT_HISTORY_LIMIT)
+  );
+  return onSnapshot(q, (snap) => {
+    cb(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<TrafficSnapshot, "id">) })));
+  });
+}
+
+export function listenSearchSnapshots(businessId: string, cb: (snapshots: SearchSnapshot[]) => void): Unsubscribe {
+  const q = query(
+    collection(db, "searchSnapshots"),
+    where("businessId", "==", businessId),
+    orderBy("retrievedAt", "asc"),
+    limit(SNAPSHOT_HISTORY_LIMIT)
+  );
+  return onSnapshot(q, (snap) => {
+    cb(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<SearchSnapshot, "id">) })));
   });
 }
