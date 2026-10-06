@@ -273,7 +273,46 @@ export const KNOWLEDGE_TYPE_LABELS: Record<KnowledgeType, string> = {
 export const DISCOVERY_SOURCE_LABELS: Record<DiscoverySource, string> = {
   semrush: "Semrush",
   gsc: "Search Console",
-  website: "סריקת אתר",
+  website: "סריקת אתר (מושבת)",
   competitor: "מתחרה",
   manual: "ידני"
+};
+
+// --- Business & Service Discovery (roadmap Milestone 3.1) ---
+// Inserted BEFORE Search Discovery in the corrected pipeline: Business
+// Understanding -> Service Map -> (owner validation) -> Search Discovery
+// seeds. See functions/businessUnderstanding.js for why this exists as its
+// own collection rather than folding into businessKnowledge: a service is a
+// structured, individually-validated unit (confirm/reject/edit/priority),
+// not a freeform knowledge note.
+
+export type ServiceSource = "owner" | "website" | "ai_inference" | "combined";
+export type ServiceOwnerStatus = "confirmed" | "rejected" | "needs_review";
+
+export interface BusinessService {
+  id: string;
+  businessId: string;
+  name: string;
+  description?: string;
+  source: ServiceSource;
+  confidence: KnowledgeConfidence; // reuses "observed" | "inferred" from businessKnowledge
+  ownerStatus: ServiceOwnerStatus;
+  priority: TaskPriority;
+  geographies: string[];
+  evidence?: string[]; // short quotes/snippets backing an inferred service, for traceability
+  createdAt: unknown;
+  updatedAt: unknown;
+}
+
+export const SERVICE_SOURCE_LABELS: Record<ServiceSource, string> = {
+  owner: "בעל/ת העסק",
+  website: "אתר",
+  ai_inference: "הסקת AI",
+  combined: "בעל/ת העסק + AI"
+};
+
+export const SERVICE_OWNER_STATUS_LABELS: Record<ServiceOwnerStatus, string> = {
+  confirmed: "מאושר",
+  rejected: "נדחה",
+  needs_review: "ממתין לבדיקה"
 };

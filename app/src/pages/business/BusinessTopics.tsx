@@ -5,6 +5,11 @@ import {
   listenBusinessKnowledge,
   createBusinessKnowledge,
   deleteBusinessKnowledge,
+  listenBusinessServices,
+  updateServiceStatus,
+  updateServicePriority,
+  createManualService,
+  deleteBusinessService,
   listenSearchTopics,
   updateSearchTopicStatus,
   createManualTopic,
@@ -12,24 +17,43 @@ import {
   addManualCompetitor,
   deleteCompetitor
 } from "../../lib/firestore";
-import { discoverFromSearchConsole, discoverFromWebsite, discoverFromSemrush } from "../../lib/functions";
-import type { DiscoveryResult } from "../../lib/functions";
+import { discoverFromSearchConsole, discoverFromSemrush, analyzeBusiness } from "../../lib/functions";
+import type { DiscoveryResult, AnalyzeBusinessResult } from "../../lib/functions";
 import {
   TOPIC_STATUS_LABELS,
   KNOWLEDGE_TYPE_LABELS,
-  DISCOVERY_SOURCE_LABELS
+  DISCOVERY_SOURCE_LABELS,
+  SERVICE_SOURCE_LABELS,
+  SERVICE_OWNER_STATUS_LABELS,
+  PRIORITY_LABELS
 } from "../../types";
-import type { BusinessKnowledge, SearchTopic, TopicStatus, KnowledgeType, Competitor } from "../../types";
+import type {
+  BusinessKnowledge,
+  SearchTopic,
+  TopicStatus,
+  KnowledgeType,
+  Competitor,
+  BusinessService,
+  ServiceOwnerStatus,
+  TaskPriority
+} from "../../types";
 import type { BusinessContext } from "./BusinessWorkspace";
 
-// Search Universe & Qualification (roadmap Milestone 3). This tab covers
-// the whole owner-facing loop: Discovery (3 trigger buttons below, each a
-// Cloud Function in functions/searchUniverse.js) → Filtering + Normalization
-// (automatic, server-side, happens inside those same calls) → Owner
-// Validation (the review queue and status selects below, plain Firestore
-// writes) → Approved Search Universe (the second table). Per the roadmap's
-// explicit instruction, this tab stops there - no SEO/GEO task generation
-// happens from anything here yet.
+// Business & Service Discovery (roadmap Milestone 3.1) + Search Universe &
+// Qualification (roadmap Milestone 3.2). The corrected pipeline this tab
+// follows, top to bottom:
+//
+//   Business onboarding + Website understanding -> Business understanding
+//   -> Service / Offer Map -> (owner validation) -> Search Discovery ->
+//   Filtering -> Normalization -> Owner Validation -> Approved Search
+//   Universe
+//
+// The website is evidence for understanding WHAT THE BUSINESS SELLS (the
+// Service Map section below), never a direct source of search topics - a
+// marketing/design website's own words are not a keyword database, which is
+// why there's no "scan website" discovery button below anymore. Per the
+// roadmap's explicit instruction, this tab stops at the approved search
+// universe - no SEO/GEO task generation happens from anything here yet.
 
 const REVIEW_STATUSES: TopicStatus[] = ["new", "unsure"];
 const APPROVED_STATUSES: TopicStatus[] = ["relevant", "priority", "brand_strategic"];
@@ -72,11 +96,70 @@ function DiscoveryResultSummary({ result }: { result: DiscoveryResult }) {
   );
 }
 
+function selectStyle(): Record<string, string | number> {
+  return {
+    background: "var(--color-bg)",
+    color: "var(--color-text)",
+    border: "1px solid var(--color-border)",
+    borderRadius: 6,
+    padding: "4px 8px",
+    fontSize: "0.8rem"
+  };
+}
+
+function ServiceStatusSelect({ service }: { service: BusinessService }) {
+  return (
+    <select
+      value={service.ownerStatus}
+      onChange={(e) => updateServiceStatus(service.id, e.target.value as ServiceOwnerStatus)}
+      style={selectStyle()}
+    >
+      {Object.entries(SERVICE_OWNER_STATUS_LABELS).map(([val, label]) => (
+        <option key={val} value={val}>{label}</option>
+      ))}
+    </select>
+  );
+}
+
+function ServicePrioritySelect({ service }: { service: BusinessService }) {
+  return (
+    <select
+      value={service.priority}
+      onChange={(e) => updateServicePriority(service.id, e.target.value as TaskPriority)}
+      style={selectStyle()}
+    >
+      {Object.entries(PRIORITY_LABELS).map(([val, label]) => (
+        <option key={val} value={val}>{label}</option>
+      ))}
+    </select>
+  );
+}
+
+function AnalyzeResultSummary({ result }: { result: AnalyzeBusinessResult }) {
+  return (
+    <span className="text-dim" style={{ fontSize: "0.78rem" }}>
+      שירותים מהקמת העסק: {result.ownerServicesSeeded} · עמודים שנסרקו: {result.pagesScanned}
+      {result.aiAvailable
+        ? ` · הוצעו ע״י AI: ${result.aiServicesProposed} · מוזגו עם קיימים: ${result.aiServicesMerged}`
+        : " · ניתוח AI לא מוגדר עדיין"}
+    </span>
+  );
+}
+
 export default function BusinessTopics() {
   const { business } = useOutletContext<BusinessContext>();
   const [knowledge, setKnowledge] = useState<BusinessKnowledge[] | null>(null);
+  const [services, setServices] = useState<BusinessService[] | null>(null);
   const [topics, setTopics] = useState<SearchTopic[] | null>(null);
   const [competitors, setCompetitors] = useState<Competitor[] | null>(null);
+
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
+  const [analyzeResult, setAnalyzeResult] = useState<AnalyzeBusinessResult | null>(null);
+
+  const [newServiceName, setNewServiceName] = useState("");
+  const [newServiceDescription, setNewServiceDescription] = useState("");
+  const [addingService, setAddingService] = useState(false);
 
   const [runningSource, setRunningSource] = useState<string | null>(null);
   const [discoveryError, setDiscoveryError] = useState<string | null>(null);
@@ -98,26 +181,54 @@ export default function BusinessTopics() {
     const unsub1 = listenBusinessKnowledge(business.id, setKnowledge);
     const unsub2 = listenSearchTopics(business.id, setTopics);
     const unsub3 = listenCompetitors(business.id, setCompetitors);
+    const unsub4 = listenBusinessServices(business.id, setServices);
     return () => {
       unsub1();
       unsub2();
       unsub3();
+      unsub4();
     };
   }, [business]);
 
   if (!business) return <div className="loading-row">טוען…</div>;
 
-  async function runDiscovery(source: "gsc" | "website" | "semrush") {
+  async function handleAnalyzeBusiness() {
+    if (!business) return;
+    setAnalyzing(true);
+    setAnalyzeError(null);
+    try {
+      const result = await analyzeBusiness(business.id);
+      setAnalyzeResult(result);
+    } catch (err) {
+      setAnalyzeError(err instanceof Error ? err.message : "שגיאה בניתוח העסק");
+    } finally {
+      setAnalyzing(false);
+    }
+  }
+
+  async function handleAddService(e: FormEvent) {
+    e.preventDefault();
+    if (!business || !newServiceName.trim()) return;
+    setAddingService(true);
+    try {
+      await createManualService(business.id, newServiceName.trim(), newServiceDescription.trim() || undefined);
+      setNewServiceName("");
+      setNewServiceDescription("");
+    } finally {
+      setAddingService(false);
+    }
+  }
+
+  async function runDiscovery(source: "gsc" | "semrush") {
     if (!business) return;
     setRunningSource(source);
     setDiscoveryError(null);
     try {
       let result: DiscoveryResult;
       if (source === "gsc") result = await discoverFromSearchConsole(business.id);
-      else if (source === "website") result = await discoverFromWebsite(business.id);
       else {
         if (!semrushSeed.trim()) {
-          setDiscoveryError("יש להזין מילת מפתח מקור (seed phrase) להרצת Semrush");
+          setDiscoveryError("יש לבחור שירות מאושר או להזין מילת מפתח מקור (seed phrase) להרצת Semrush");
           setRunningSource(null);
           return;
         }
@@ -165,18 +276,102 @@ export default function BusinessTopics() {
 
   const reviewTopics = (topics || []).filter((t) => REVIEW_STATUSES.includes(t.status));
   const approvedTopics = (topics || []).filter((t) => APPROVED_STATUSES.includes(t.status));
+  const confirmedServices = (services || []).filter((s) => s.ownerStatus === "confirmed");
+  const needsReviewServices = (services || []).filter((s) => s.ownerStatus === "needs_review");
+  const otherServices = (services || []).filter((s) => s.ownerStatus === "rejected");
 
   return (
     <div className="section-block">
-      <h2 className="section-title">נושאי חיפוש</h2>
+      <h2 className="section-title">הבנת העסק ונושאי חיפוש</h2>
       <p className="text-dim" style={{ fontSize: "0.82rem", marginTop: -8, marginBottom: 20 }}>
-        Discovery → Filtering → Normalization → Owner Validation → Approved Search Universe. יצירת משימות SEO/GEO
-        מתוך הנושאים המאושרים מתוכננת לשלב הבא.
+        הבנת העסק ← מפת שירותים (אימות בעל/ת העסק) ← גילוי חיפוש ← סינון ← נורמליזציה ← אימות בעל/ת העסק ← יקום חיפוש
+        מאושר. יצירת משימות SEO/GEO מתוך הנושאים המאושרים מתוכננת לשלב הבא.
       </p>
 
-      {/* --- Discovery --- */}
+      {/* --- Business Understanding & Service Map --- */}
       <div className="table-toolbar" style={{ marginBottom: 12 }}>
-        <h3 className="section-title" style={{ marginBottom: 0, fontSize: "1rem" }}>גילוי</h3>
+        <h3 className="section-title" style={{ marginBottom: 0, fontSize: "1rem" }}>הבנת העסק ומפת שירותים</h3>
+      </div>
+      <p className="text-dim" style={{ fontSize: "0.78rem", marginBottom: 12 }}>
+        לפני שמחפשים מה העסק צריך להיראות עבורו, המערכת צריכה להבין מה העסק בעצם מוכר. האתר הוא עדות לכך, לא מאגר
+        מילות מפתח - לכן הניתוח קורא את האתר כדי להציע שירותים לאימות, ולא יוצר נושאי חיפוש ישירות מהטקסט שבו.
+      </p>
+      {analyzeError && <div className="login-error">{analyzeError}</div>}
+      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10 }}>
+        <button type="button" className="btn btn-outline" disabled={analyzing} onClick={handleAnalyzeBusiness}>
+          {analyzing ? "מנתח…" : "נתח את העסק והאתר"}
+        </button>
+        {analyzeResult && <AnalyzeResultSummary result={analyzeResult} />}
+      </div>
+      {analyzeResult && !analyzeResult.aiAvailable && (
+        <p className="text-dim" style={{ fontSize: "0.78rem", marginBottom: 12 }}>
+          ניתוח AI (הצעת שירותים נוספים מתוך האתר) ממתין להגדרת מפתח Anthropic API - שירותים שהוגדרו בהקמת העסק עדיין
+          נקלטים באופן מיידי.
+        </p>
+      )}
+
+      {services === null && <div className="loading-row">טוען…</div>}
+
+      {services !== null && services.length === 0 && (
+        <EmptyState title="אין עדיין מפת שירותים" subtitle="לחץ 'נתח את העסק והאתר' למעלה, או הוסף שירות ידנית מטה." />
+      )}
+
+      {services !== null && services.length > 0 && (
+        <div className="data-table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>שירות</th>
+                <th>מקור</th>
+                <th>עדיפות</th>
+                <th>סטטוס</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...needsReviewServices, ...confirmedServices, ...otherServices].map((s) => (
+                <tr key={s.id}>
+                  <td>
+                    <strong>{s.name}</strong>
+                    {s.description && <div className="text-muted" style={{ fontSize: "0.78rem", marginTop: 2 }}>{s.description}</div>}
+                    {s.evidence && s.evidence.length > 0 && (
+                      <div className="text-dim" style={{ fontSize: "0.72rem", marginTop: 2 }}>
+                        עדות: {s.evidence.slice(0, 2).join(" · ")}
+                      </div>
+                    )}
+                  </td>
+                  <td className="text-muted">{SERVICE_SOURCE_LABELS[s.source]}</td>
+                  <td><ServicePrioritySelect service={s} /></td>
+                  <td><ServiceStatusSelect service={s} /></td>
+                  <td>
+                    <button className="btn btn-danger-outline btn-sm" onClick={() => deleteBusinessService(s.id)}>מחיקה</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <form onSubmit={handleAddService} className="form-row" style={{ marginTop: 14, alignItems: "flex-end" }}>
+        <div className="form-field">
+          <label htmlFor="service-name">הוספת שירות ידנית</label>
+          <input id="service-name" value={newServiceName} onChange={(e) => setNewServiceName(e.target.value)} placeholder="שם השירות" />
+        </div>
+        <div className="form-field">
+          <label htmlFor="service-desc">תיאור (אופציונלי)</label>
+          <input id="service-desc" value={newServiceDescription} onChange={(e) => setNewServiceDescription(e.target.value)} />
+        </div>
+        <div className="form-field" style={{ flex: "0 0 auto" }}>
+          <button type="submit" className="btn btn-primary" disabled={addingService || !newServiceName.trim()}>
+            {addingService ? "מוסיף…" : "+ הוספה"}
+          </button>
+        </div>
+      </form>
+
+      {/* --- Search Discovery --- */}
+      <div className="table-toolbar" style={{ marginTop: 32, marginBottom: 12 }}>
+        <h3 className="section-title" style={{ marginBottom: 0, fontSize: "1rem" }}>גילוי חיפוש</h3>
       </div>
       {discoveryError && <div className="login-error">{discoveryError}</div>}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
@@ -188,19 +383,12 @@ export default function BusinessTopics() {
         >
           {runningSource === "gsc" ? "סורק…" : "גילוי מ-Search Console"}
         </button>
-        <button
-          type="button"
-          className="btn btn-outline"
-          disabled={runningSource !== null}
-          onClick={() => runDiscovery("website")}
-        >
-          {runningSource === "website" ? "סורק…" : "סריקת אתר קלה"}
-        </button>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
           <input
             value={semrushSeed}
             onChange={(e) => setSemrushSeed(e.target.value)}
-            placeholder="מילת מפתח מקור ל-Semrush"
+            placeholder={confirmedServices.length > 0 ? "בחר שירות מאושר או הקלד..." : "מילת מפתח מקור ל-Semrush"}
+            list="confirmed-services-datalist"
             style={{
               background: "var(--color-bg)",
               color: "var(--color-text)",
@@ -208,9 +396,14 @@ export default function BusinessTopics() {
               borderRadius: 6,
               padding: "6px 10px",
               fontSize: "0.82rem",
-              width: 200
+              width: 220
             }}
           />
+          <datalist id="confirmed-services-datalist">
+            {confirmedServices.map((s) => (
+              <option key={s.id} value={s.name} />
+            ))}
+          </datalist>
           <button
             type="button"
             className="btn btn-outline"
@@ -222,7 +415,9 @@ export default function BusinessTopics() {
         </div>
       </div>
       <p className="text-dim" style={{ fontSize: "0.78rem", marginBottom: 12 }}>
-        Semrush ממתין להקצאת יחידות API בחשבון הקיים - ההרצה תחזיר שגיאה ברורה עד שייוגדר מפתח API אמיתי.
+        Search Console משקף נראות קיימת בגוגל, לא את כל יקום החיפוש הרלוונטי. Semrush מומלץ להריץ עם שם שירות מאושר
+        ממפת השירותים למעלה כמילת מפתח מקור. Semrush ממתין להקצאת יחידות API בחשבון הקיים - ההרצה תחזיר שגיאה ברורה
+        עד שייוגדר מפתח API אמיתי.
       </p>
       {lastResult && (
         <div style={{ marginBottom: 16 }}>

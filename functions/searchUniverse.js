@@ -1,8 +1,21 @@
 // GuyHadas Visibility OS - Search Universe & Qualification (roadmap
-// Milestone 3). Implements the first half of the roadmap's core loop:
+// Milestone 3.2). Implements the second half of the corrected core loop:
 //
-//   Discovery → Filtering → Normalization → Owner Validation → Approved
-//   Search Universe
+//   Business Understanding -> Service Map -> Search Discovery ->
+//   Filtering -> Normalization -> Owner Validation -> Approved Search
+//   Universe
+//
+// Business Understanding and the Service Map (Milestone 3.1) live in
+// functions/businessUnderstanding.js. What's here is everything after
+// that: pulling search-demand candidates from Google Search Console or
+// Semrush (seeded by a confirmed service, chosen in the UI - see
+// BusinessTopics.tsx), then automatic filtering + Jaccard normalization +
+// owner validation. A direct website-scrape discovery source used to live
+// here too (visibilityDiscoverFromWebsite); it's been retired - scraping a
+// marketing/design website's own words and treating them as search demand
+// produced noise, not real demand. The website is now evidence for
+// *business* understanding only (functions/businessUnderstanding.js), never
+// a direct source of Search Topics.
 //
 // Owner validation (approve/reject/prioritize/brand-strategic/unsure) and
 // manual topic addition are plain Firestore writes from the client -
@@ -10,41 +23,22 @@
 // admin-read/write in firestore.rules, same posture as `businesses`/
 // `tasks`/`opportunities`. What has to live here (server-side, ID-token
 // checked, same as functions/visibility.js) is anything that needs a
-// credential: pulling candidates from Google Search Console or Semrush, or
-// fetching the business's own public website. Both the discovery sources
-// (GSC/website/Semrush) and the filtering+normalization that runs on their
-// output share one pipeline - storeDiscoveredCandidates() below - so there
-// is exactly one place a discovered topic gets created or merged.
+// credential: pulling candidates from Google Search Console or Semrush.
+// Both discovery sources (GSC/Semrush) and the filtering+normalization that
+// runs on their output share one pipeline - storeDiscoveredCandidates()
+// below - so there is exactly one place a discovered topic gets created or
+// merged.
 
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const { google } = require("googleapis");
-const cheerio = require("cheerio");
 const { setCors, requireAdmin, getVisibilityAuth } = require("./visibility");
+const { tokenize, jaccard } = require("./textSimilarity");
+const { extractDomain } = require("./webUtils");
 const semrush = require("./semrush");
 
 const JACCARD_MERGE_THRESHOLD = 0.5;
 const MIN_QUERY_LENGTH = 2;
-
-function tokenize(text) {
-  return new Set(
-    text
-      .toLowerCase()
-      .replace(/[.,!?"'()[\]{}:;]/g, " ")
-      .split(/\s+/)
-      .filter((t) => t.length > 0)
-  );
-}
-
-function jaccard(setA, setB) {
-  if (setA.size === 0 || setB.size === 0) return 0;
-  let intersection = 0;
-  for (const t of setA) {
-    if (setB.has(t)) intersection++;
-  }
-  const union = setA.size + setB.size - intersection;
-  return union === 0 ? 0 : intersection / union;
-}
 
 // --- Automatic Filtering (3.3) ---
 // Deterministic, conservative on purpose: only drops a candidate when it
@@ -197,16 +191,6 @@ async function upsertCompetitors(businessId, competitors) {
   return count;
 }
 
-function extractDomain(websiteUrl) {
-  if (!websiteUrl) return null;
-  try {
-    const withProtocol = /^https?:\/\//i.test(websiteUrl) ? websiteUrl : `https://${websiteUrl}`;
-    return new URL(withProtocol).hostname.replace(/^www\./, "");
-  } catch (err) {
-    return null;
-  }
-}
-
 // --- Discovery source 1: Google Search Console (already connected, no new setup) ---
 exports.visibilityDiscoverFromSearchConsole = functions
   .runWith({ secrets: ["VISIBILITY_GOOGLE_SA_KEY"] })
@@ -267,102 +251,7 @@ exports.visibilityDiscoverFromSearchConsole = functions
     }
   });
 
-// --- Discovery source 2: lightweight website scan (no external dependency) ---
-const MAX_PAGES = 12;
-const FETCH_TIMEOUT_MS = 8000;
-
-async function fetchWithTimeout(url) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-  try {
-    const res = await fetch(url, {
-      signal: controller.signal,
-      headers: { "User-Agent": "GuyHadasVisibilityOS/1.0 (+https://guyhadas.xyz)" }
-    });
-    if (!res.ok) return null;
-    return await res.text();
-  } catch (err) {
-    return null;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-async function discoverSitePages(origin) {
-  const sitemapXml = await fetchWithTimeout(`${origin}/sitemap.xml`);
-  if (sitemapXml) {
-    const $ = cheerio.load(sitemapXml, { xmlMode: true });
-    const locs = $("loc")
-      .map((_, el) => $(el).text().trim())
-      .get()
-      .filter((u) => u.startsWith(origin));
-    if (locs.length > 0) return locs.slice(0, MAX_PAGES);
-  }
-  return [origin]; // fallback: homepage only
-}
-
-function extractPhrasesFromHtml(html) {
-  const $ = cheerio.load(html);
-  const phrases = new Set();
-  const title = $("title").first().text().trim();
-  if (title) phrases.add(title);
-  const metaDesc = $('meta[name="description"]').attr("content");
-  if (metaDesc) phrases.add(metaDesc.trim());
-  $("h1, h2").each((_, el) => {
-    const text = $(el).text().trim().replace(/\s+/g, " ");
-    if (text.length >= MIN_QUERY_LENGTH && text.length <= 120) phrases.add(text);
-  });
-  return Array.from(phrases);
-}
-
-exports.visibilityDiscoverFromWebsite = functions.https.onRequest(async (req, res) => {
-  setCors(res);
-  if (req.method === "OPTIONS") {
-    res.status(204).send("");
-    return;
-  }
-  const user = await requireAdmin(req, res);
-  if (!user) return;
-
-  const { businessId } = req.body || {};
-  if (!businessId) {
-    res.status(400).json({ success: false, error: "businessId is required" });
-    return;
-  }
-
-  try {
-    const db = admin.firestore();
-    const bizDoc = await db.collection("businesses").doc(businessId).get();
-    if (!bizDoc.exists || !bizDoc.data().website) {
-      res.status(400).json({ success: false, error: "This business has no website set in its profile" });
-      return;
-    }
-    const domain = extractDomain(bizDoc.data().website);
-    const origin = `https://${domain}`;
-
-    const pages = await discoverSitePages(origin);
-    const allPhrases = new Set();
-    for (const pageUrl of pages) {
-      const html = await fetchWithTimeout(pageUrl);
-      if (!html) continue;
-      for (const phrase of extractPhrasesFromHtml(html)) allPhrases.add(phrase);
-    }
-
-    if (allPhrases.size === 0) {
-      res.status(502).json({ success: false, error: `Could not read any pages from ${origin}` });
-      return;
-    }
-
-    const candidates = Array.from(allPhrases).map((query) => ({ query }));
-    const result = await storeDiscoveredCandidates(businessId, candidates, "website", origin);
-    res.status(200).json({ success: true, pagesScanned: pages.length, ...result });
-  } catch (err) {
-    console.error("visibilityDiscoverFromWebsite error:", err.message);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// --- Discovery source 3: Semrush ---
+// --- Discovery source 2: Semrush ---
 // Safely gated behind SEMRUSH_API_KEY (see functions/semrush.js). Until a
 // real key with API units is stored in that secret, this returns a clean
 // "not configured" error - no architectural change needed once it is.

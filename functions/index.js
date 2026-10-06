@@ -10,6 +10,7 @@ const db = admin.firestore();
 // auth model (every function requires a verified Firebase ID token), not
 // because of the Calendar/email logic below, which stays untouched.
 Object.assign(exports, require("./visibility"));
+Object.assign(exports, require("./businessUnderstanding"));
 Object.assign(exports, require("./searchUniverse"));
 
 const GUY_CALENDAR_EMAIL = "mr.hadas@gmail.com";

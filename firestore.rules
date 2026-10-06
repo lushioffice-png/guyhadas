@@ -111,16 +111,28 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // --- Search Universe & Qualification (roadmap Milestone 3) ---
-    // Discovery → Filtering → Normalization → Owner Validation → Approved
-    // Search Universe. Unlike integrations/trafficSnapshots/searchSnapshots
-    // above, these four ARE client-writable by the admin: owner validation
-    // (approve/reject/prioritize/brand-strategic/unsure, manual topic/
-    // keyword add, business-knowledge entries like exclusion rules) is a
-    // direct Firestore write from the Topics tab, not a Cloud Function call.
-    // The three discovery functions (visibilityDiscoverFromSearchConsole/
-    // Website/Semrush, functions/searchUniverse.js) also write here, using
-    // the Admin SDK, which bypasses these rules regardless.
+    // --- Business & Service Discovery (roadmap Milestone 3.1) ---
+    // Business Understanding -> Service Map -> (owner validation) -> Search
+    // Discovery seeds. Client-writable by the admin, same posture as
+    // searchTopics below: owner validation (confirm/reject/edit a proposed
+    // service, manual service add) is a direct Firestore write from the
+    // Topics tab. The visibilityAnalyzeBusiness Cloud Function
+    // (functions/businessUnderstanding.js) also writes here via the Admin
+    // SDK, which bypasses this rule regardless.
+    match /businessServices/{serviceId} {
+      allow read, write: if isAdmin();
+    }
+
+    // --- Search Universe & Qualification (roadmap Milestone 3.2) ---
+    // Search Discovery → Filtering → Normalization → Owner Validation →
+    // Approved Search Universe. Unlike integrations/trafficSnapshots/
+    // searchSnapshots above, these four ARE client-writable by the admin:
+    // owner validation (approve/reject/prioritize/brand-strategic/unsure,
+    // manual topic/keyword add, business-knowledge entries like exclusion
+    // rules) is a direct Firestore write from the Topics tab, not a Cloud
+    // Function call. The discovery functions (visibilityDiscoverFromSearchConsole/
+    // Semrush, functions/searchUniverse.js) also write here, using the
+    // Admin SDK, which bypasses these rules regardless.
 
     match /businessKnowledge/{knowledgeId} {
       allow read, write: if isAdmin();
