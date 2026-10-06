@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { initializeFirestore } from "firebase/firestore";
 
 // Same Firebase project as the public guyhadas.xyz site (guyhadas-e38c4) -
 // this app is a second Hosting site on the *same* project, not a new one.
@@ -18,7 +18,13 @@ const firebaseConfig = {
 
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+// ignoreUndefinedProperties: the Add Business/Task/Opportunity forms send
+// every unfilled optional field as `undefined` (e.g. `description.trim() ||
+// undefined`), which the Firestore SDK rejects by default with "Unsupported
+// field value: undefined" - surfaced to the user as a generic save error.
+// Telling Firestore to skip undefined fields instead of throwing matches
+// the forms' actual intent (omit the field), without rewriting every modal.
+export const db = initializeFirestore(app, { ignoreUndefinedProperties: true });
 
 // Admin allowlist for the Visibility OS. Generalized from the single
 // hardcoded admin email in the public site's admin.js so more GuyHadas
