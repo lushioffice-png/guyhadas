@@ -2,6 +2,10 @@
 node_modules/
 functions/node_modules/
 
+# Vite build output (app.guyhadas.xyz) - built fresh on deploy, not committed
+app/dist/
+app/*.tsbuildinfo
+
 # Firebase cache and logs
 .firebase/
 firebase-debug.log

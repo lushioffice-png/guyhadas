@@ -3,11 +3,15 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Only mr.hadas@gmail.com, signed in with real Firebase Auth, is admin.
-    // (Not just "any authenticated user" - Email/Password sign-up is public
-    // by default, so this must check the specific address, not just auth != null.)
+    // GuyHadas Visibility OS + the public-site admin dashboard share this
+    // same allowlist. Not just "any authenticated user" - Email/Password
+    // sign-up is public by default, so this must check specific addresses,
+    // not just `auth != null`. Generalized from a single hardcoded email so
+    // more GuyHadas users can be added later without restructuring rules -
+    // still a flat allowlist on purpose (spec: don't build RBAC yet).
     function isAdmin() {
-      return request.auth != null && request.auth.token.email == 'mr.hadas@gmail.com';
+      return request.auth != null
+             && request.auth.token.email in ['mr.hadas@gmail.com'];
     }
 
     // Default deny for anything not explicitly opened below.
@@ -61,5 +65,37 @@ service cloud.firestore {
                     && request.resource.data.endIso is string;
       allow update, delete: if isAdmin();
     }
+
+    // --- GuyHadas Visibility OS (app.guyhadas.xyz) ---
+    // Entirely private/internal - everything below is admin-only, both
+    // reads and writes. No public-facing collection here, unlike leads/
+    // bookings/settings above which the marketing site writes to directly.
+
+    match /businesses/{businessId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /tasks/{taskId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /opportunities/{opportunityId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Integration status docs (ga4/search_console/semrush/...). Read-only
+    // in V0.1 (the UI just displays status); writes start in Milestone 2
+    // when Cloud Functions begin creating/updating these after a real
+    // connection, using the Admin SDK (which bypasses these rules anyway).
+    match /integrations/{integrationId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // metrics / searchSnapshots / trafficSnapshots / aiVisibilitySnapshots /
+    // competitors / keywords / topics / contentAssets / experiments /
+    // expertKnowledge / recommendations are not yet read or written by any
+    // client - left to the blanket default-deny above until Milestone 2/3
+    // actually introduces them, same as everywhere else in this file.
   }
 }

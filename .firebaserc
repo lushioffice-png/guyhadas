@@ -1,5 +1,17 @@
 {
   "projects": {
     "default": "guyhadas-e38c4"
+  },
+  "targets": {
+    "guyhadas-e38c4": {
+      "hosting": {
+        "public-site": [
+          "guyhadas-e38c4"
+        ],
+        "app": [
+          "guyhadas-app"
+        ]
+      }
+    }
   }
 }
