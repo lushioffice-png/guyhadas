@@ -300,9 +300,63 @@ export interface BusinessService {
   priority: TaskPriority;
   geographies: string[];
   evidence?: string[]; // short quotes/snippets backing an inferred service, for traceability
+  // Milestone 3.1 refinement: per-quote source page, and whether the quote
+  // was actually found in the scraped text (functions/serviceFacets.js).
+  evidenceSources?: ServiceEvidence[];
+  sourceUrls?: string[];
+  // Structured interpretation underneath the human-readable `name` - the
+  // separate dimensions M3.2 search discovery combines into seeds. Absent
+  // on items created before this existed until the next analysis run.
+  facets?: ServiceFacets;
+  facetsVersion?: number;
   createdAt: unknown;
   updatedAt: unknown;
 }
+
+// owner = typed by the owner; website = value found verbatim in the
+// scraped site text; ai_inference = AI interpretation not found verbatim.
+export type FacetProvenance = "owner" | "website" | "ai_inference";
+
+export interface FacetValue {
+  value: string;
+  provenance: FacetProvenance;
+  sourceUrl: string | null;
+}
+
+export type FacetDimension =
+  | "services"
+  | "projectTypes"
+  | "audiences"
+  | "markets"
+  | "offerings"
+  | "geographies"
+  | "positioning"
+  | "needs";
+
+export type ServiceFacets = Partial<Record<FacetDimension, FacetValue[]>>;
+
+export interface ServiceEvidence {
+  quote: string;
+  sourceUrl: string | null;
+  verified: boolean;
+}
+
+export const FACET_DIMENSION_LABELS: Record<FacetDimension, string> = {
+  services: "שירות",
+  projectTypes: "סוג פרויקט",
+  audiences: "קהל",
+  markets: "שוק",
+  offerings: "מודל שירות",
+  geographies: "אזור",
+  positioning: "מיצוב",
+  needs: "צורך"
+};
+
+export const FACET_PROVENANCE_LABELS: Record<FacetProvenance, string> = {
+  owner: "בעל/ת העסק",
+  website: "מופיע באתר",
+  ai_inference: "פרשנות AI"
+};
 
 export const SERVICE_SOURCE_LABELS: Record<ServiceSource, string> = {
   owner: "בעל/ת העסק",

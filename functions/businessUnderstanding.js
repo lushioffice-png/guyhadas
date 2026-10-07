@@ -45,15 +45,28 @@ const { tokenize, jaccard } = require("./textSimilarity");
 const { extractDomain, fetchWithTimeout, discoverSitePages } = require("./webUtils");
 const { runGoverned } = require("./apiUsage");
 const apiLimits = require("./apiLimits");
+const {
+  buildPageCorpus,
+  sanitizeAiFacets,
+  sanitizeAiEvidence,
+  ownerFacets,
+  mergeFacets,
+  hasAnyFacet
+} = require("./serviceFacets");
 
 const SERVICE_MERGE_THRESHOLD = 0.6; // tighter than Search Topics' 0.5 - service names are short, so a looser threshold would wrongly merge distinct services that just share one word (e.g. "עיצוב פנים" / "עיצוב גרפי")
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
-const ANTHROPIC_MAX_TOKENS = 2048; // kept as a named constant - it's also the worst-case output used for the pre-call cost estimate below, so the two must stay in sync
+const ANTHROPIC_MAX_TOKENS = 4096; // raised from 2048 when each item started carrying structured facets (more output per item); kept as a named constant - it's also the worst-case output used for the pre-call cost estimate below, so the two must stay in sync
 // Verified against platform.claude.com/docs/en/about-claude/models/overview
 // at implementation time, not guessed - see the Milestone 3.1 deliverable
 // doc for the source. If Anthropic ships a newer model later, update this
 // one constant.
 const ANTHROPIC_MODEL = "claude-sonnet-5-5";
+// Bumped whenever the prompt or the expected response shape changes. It is
+// part of the governed (cached) input, so a result cached under an older
+// prompt is never reused for the new shape - one fresh call, then cached
+// again as usual. v2 = structured facets + per-quote source URLs.
+const SERVICE_PROMPT_VERSION = 2;
 
 function isAiConfigured() {
   return !!process.env.ANTHROPIC_API_KEY;
@@ -77,7 +90,7 @@ function extractEvidenceFromHtml(html, url) {
   return { url, title, metaDescription, headings, bodyText };
 }
 
-function buildServiceInferencePrompt(business, confirmedServiceNames, pagesEvidence) {
+function buildServiceInferencePrompt(business, knownNames, rejectedNames, pagesEvidence) {
   const context = [];
   context.push(`Business name: ${business.name}`);
   if (business.industry) context.push(`Industry: ${business.industry}`);
@@ -87,10 +100,13 @@ function buildServiceInferencePrompt(business, confirmedServiceNames, pagesEvide
     context.push(`Geographic markets: ${business.geographicMarkets.join(", ")}`);
   }
   if (business.businessObjectives) context.push(`Business objectives: ${business.businessObjectives}`);
-  if (confirmedServiceNames.length) {
+  if (knownNames.length) {
     context.push(
-      `Services the owner has already confirmed (do NOT repeat these - only propose additional, distinct services/offerings not already covered): ${confirmedServiceNames.join(", ")}`
+      `Items already on this business's service map: ${knownNames.join(" | ")}. Include each of these in your output too (set "existingName" to the exact name above) so they get the same structured interpretation - do not propose near-duplicates of them as new items.`
     );
+  }
+  if (rejectedNames.length) {
+    context.push(`Items the owner has rejected (do NOT propose these again, or close variants): ${rejectedNames.join(" | ")}`);
   }
 
   const evidenceBlock = pagesEvidence
@@ -100,7 +116,7 @@ function buildServiceInferencePrompt(business, confirmedServiceNames, pagesEvide
     )
     .join("\n\n");
 
-  return `You are analyzing a business's own website to identify the distinct services or offerings it actually provides, for an SEO/GEO search-visibility tool. Read the business context and website evidence below, then propose the services/offerings this business provides.
+  return `You are analyzing a business's own website to build a structured map of what it sells, for an SEO/GEO search-visibility tool. Each item is something the business offers, as the website presents it, plus a structured breakdown of the separate dimensions packed into it.
 
 Business context:
 ${context.join("\n")}
@@ -108,10 +124,30 @@ ${context.join("\n")}
 Website evidence:
 ${evidenceBlock}
 
-Respond with ONLY a JSON array (no prose, no markdown code fences), where each item has exactly this shape:
-{"name": "short service name, in the same language as the website content", "description": "one-sentence description", "geographies": ["city/region names actually mentioned in the evidence, if any"], "evidence": ["short exact quotes or close paraphrases from the evidence above that justify this service"]}
+Respond with ONLY a JSON array (no prose, no markdown code fences). Each item has exactly this shape:
+{
+  "name": "the offering as a short human-readable label, close to how the website phrases it, in the website's language",
+  "existingName": "exact name of the already-known item this corresponds to, or null if it is new",
+  "description": "one-sentence description",
+  "facets": {
+    "services": [{"value": "core service(s) - list several if the item combines them", "url": "page URL"}],
+    "projectTypes": [{"value": "kind of project, e.g. type of property or space", "url": "page URL"}],
+    "audiences": [{"value": "customer type", "url": "page URL"}],
+    "markets": [{"value": "market or sector, e.g. residential vs commercial", "url": "page URL"}],
+    "offerings": [{"value": "a packaged engagement or service model", "url": "page URL"}],
+    "geographies": [{"value": "place named in the evidence", "url": "page URL"}],
+    "positioning": [{"value": "qualifier such as a price tier or style", "url": "page URL"}],
+    "needs": [{"value": "customer problem or need, only if the website states one", "url": "page URL"}]
+  },
+  "evidence": [{"quote": "short exact quote from the evidence above", "url": "the page URL it came from"}]
+}
 
-Propose between 2 and 10 distinct, non-overlapping services. Do not invent a service with no support in the business context or website evidence above.`;
+Rules:
+- Facet values are short terms in the website's language. Leave a dimension as an empty array when the evidence does not support it - never fill a dimension just to fill it.
+- Derive every value from the evidence or business context above. Do not invent.
+- Keep one item per offering as the website presents it; put its separate dimensions in facets rather than splitting it into several items.
+- "url" must be one of the page URLs listed above.
+- Return between 2 and 15 items in total (already-known items included).`;
 }
 
 // Returns { proposals, usage } rather than just the parsed array - usage
@@ -217,8 +253,25 @@ exports.visibilityAnalyzeBusiness = functions
       // against, not just services that existed before this call.
       const known = existingSnap.docs.map((d) => {
         const data = d.data();
-        return { id: d.id, name: data.name, source: data.source, ownerStatus: data.ownerStatus, tokens: tokenize(data.name) };
+        return {
+          id: d.id,
+          name: data.name,
+          source: data.source,
+          ownerStatus: data.ownerStatus,
+          facets: data.facets || null,
+          tokens: tokenize(data.name)
+        };
       });
+
+      // Items created before facets existed: owner-entered ones get their
+      // deterministic owner facets now (free, no AI). AI-proposed ones get
+      // theirs from the AI step below, via existingName matching.
+      for (const s of known) {
+        if ((s.source === "owner" || s.source === "combined") && !hasAnyFacet(s.facets)) {
+          s.facets = ownerFacets(s.name, s.source === "owner" ? business.geographicMarkets : []);
+          await db.collection("businessServices").doc(s.id).update({ facets: s.facets, facetsVersion: SERVICE_PROMPT_VERSION });
+        }
+      }
 
       // Step 1: deterministic, no AI needed - the owner already typed these
       // in at onboarding, so they're confirmed immediately.
@@ -239,10 +292,19 @@ exports.visibilityAnalyzeBusiness = functions
           priority: "medium",
           geographies: business.geographicMarkets || [],
           evidence: [],
+          facets: ownerFacets(name, business.geographicMarkets),
+          facetsVersion: SERVICE_PROMPT_VERSION,
           createdAt: now,
           updatedAt: now
         });
-        known.push({ id: ref.id, name, source: "owner", ownerStatus: "confirmed", tokens });
+        known.push({
+          id: ref.id,
+          name,
+          source: "owner",
+          ownerStatus: "confirmed",
+          facets: ownerFacets(name, business.geographicMarkets),
+          tokens
+        });
         ownerServicesSeeded++;
       }
 
@@ -293,8 +355,26 @@ exports.visibilityAnalyzeBusiness = functions
           : "This business has no website set in its profile, so there is nothing to analyze";
       } else if (aiAvailable && pagesEvidence.length > 0) {
         try {
-          const confirmedNames = known
-            .filter((s) => s.ownerStatus === "confirmed")
+          const knownNames = known
+            .filter((s) => s.ownerStatus !== "rejected")
+            .map((s) => s.name)
+            .sort();
+          const rejectedNames = known
+            .filter((s) => s.ownerStatus === "rejected")
+            .map((s) => s.name)
+            .sort();
+          const corpus = buildPageCorpus(pagesEvidence);
+          // The cache key is deliberately narrower than the prompt. Only
+          // what can change the answer goes in: the website evidence and
+          // the owner's own items. Items the AI itself proposed earlier
+          // (and the owner's confirm/reject/priority decisions on them) are
+          // left out - otherwise every run that adds a proposal would
+          // change the key and force another paid call next time. Those
+          // decisions are still enforced on every run, cache hit or not, by
+          // the merge loop below (matching existing items, skipping
+          // rejected ones).
+          const ownerNames = known
+            .filter((s) => s.source === "owner" || s.source === "combined")
             .map((s) => s.name)
             .sort();
 
@@ -302,11 +382,12 @@ exports.visibilityAnalyzeBusiness = functions
             provider: "anthropic",
             operation: "analyzeBusinessServices",
             businessId,
-            input: { confirmedNames, pagesEvidence },
+            input: { promptVersion: SERVICE_PROMPT_VERSION, ownerNames, pagesEvidence },
             forceRefresh: !!forceRefresh,
-            estimateCost: (input) => estimatePreCallCostUsd(buildServiceInferencePrompt(business, input.confirmedNames, input.pagesEvidence)),
+            estimateCost: (input) =>
+              estimatePreCallCostUsd(buildServiceInferencePrompt(business, knownNames, rejectedNames, input.pagesEvidence)),
             execute: async (input) => {
-              const prompt = buildServiceInferencePrompt(business, input.confirmedNames, input.pagesEvidence);
+              const prompt = buildServiceInferencePrompt(business, knownNames, rejectedNames, input.pagesEvidence);
               const { proposals, usage } = await proposeServicesWithAi(prompt);
               const actualCostUsd = computeActualCostUsd(usage.inputTokens, usage.outputTokens);
               return { result: proposals, usage: { ...usage, actualCostUsd } };
@@ -326,19 +407,34 @@ exports.visibilityAnalyzeBusiness = functions
               const name = (p && p.name ? p.name : "").trim();
               if (!name) continue;
               const tokens = tokenize(name);
-              const match = known.find((s) => jaccard(tokens, s.tokens) >= SERVICE_MERGE_THRESHOLD);
-              const evidence = Array.isArray(p.evidence) ? p.evidence.slice(0, 5) : [];
-              const geographies = Array.isArray(p.geographies) ? p.geographies : [];
+              const existingName = p && typeof p.existingName === "string" ? p.existingName.trim() : "";
+              const match =
+                (existingName && known.find((s) => s.name === existingName)) ||
+                known.find((s) => jaccard(tokens, s.tokens) >= SERVICE_MERGE_THRESHOLD);
+              if (match && match.ownerStatus === "rejected") continue; // never resurrect what the owner rejected
+              const facets = sanitizeAiFacets(p.facets, corpus);
+              const evidenceSources = sanitizeAiEvidence(p.evidence, corpus);
+              const evidence = evidenceSources.map((e) => e.quote);
+              const sourceUrls = [...new Set(evidenceSources.map((e) => e.sourceUrl).filter(Boolean))];
+              const geographies = facets.geographies.map((g) => g.value);
 
               if (match) {
-                // Merge into the existing service rather than creating a
-                // near-duplicate. If it was owner-entered, mark the richer
-                // provenance as "combined" (both the owner and the website
-                // evidence point to this service) rather than overwriting it.
-                const updateData = { updatedAt: now };
+                // Attach structure to the existing item rather than creating
+                // a near-duplicate. Its name, description, status and
+                // priority are left exactly as they are - only facets and
+                // evidence are added. Owner-provenance facet values always
+                // win over AI ones (mergeFacets).
+                const mergedFacets = mergeFacets(match.facets, facets);
+                const updateData = { updatedAt: now, facets: mergedFacets, facetsVersion: SERVICE_PROMPT_VERSION };
                 if (match.source === "owner") updateData.source = "combined";
-                if (evidence.length > 0) updateData.evidence = admin.firestore.FieldValue.arrayUnion(...evidence);
+                if (evidence.length > 0) {
+                  updateData.evidence = admin.firestore.FieldValue.arrayUnion(...evidence);
+                  updateData.evidenceSources = admin.firestore.FieldValue.arrayUnion(...evidenceSources);
+                }
+                if (sourceUrls.length > 0) updateData.sourceUrls = admin.firestore.FieldValue.arrayUnion(...sourceUrls);
                 await db.collection("businessServices").doc(match.id).update(updateData);
+                match.facets = mergedFacets;
+                if (match.source === "owner") match.source = "combined";
                 aiServicesMerged++;
                 continue;
               }
@@ -353,10 +449,14 @@ exports.visibilityAnalyzeBusiness = functions
                 priority: "medium",
                 geographies,
                 evidence,
+                evidenceSources,
+                sourceUrls,
+                facets,
+                facetsVersion: SERVICE_PROMPT_VERSION,
                 createdAt: now,
                 updatedAt: now
               });
-              known.push({ id: ref.id, name, source: "ai_inference", ownerStatus: "needs_review", tokens });
+              known.push({ id: ref.id, name, source: "ai_inference", ownerStatus: "needs_review", facets, tokens });
               aiServicesProposed++;
             }
           }

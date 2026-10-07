@@ -25,7 +25,9 @@ import {
   DISCOVERY_SOURCE_LABELS,
   SERVICE_SOURCE_LABELS,
   SERVICE_OWNER_STATUS_LABELS,
-  PRIORITY_LABELS
+  PRIORITY_LABELS,
+  FACET_DIMENSION_LABELS,
+  FACET_PROVENANCE_LABELS
 } from "../../types";
 import type {
   BusinessKnowledge,
@@ -35,7 +37,9 @@ import type {
   Competitor,
   BusinessService,
   ServiceOwnerStatus,
-  TaskPriority
+  TaskPriority,
+  FacetDimension,
+  FacetValue
 } from "../../types";
 import type { BusinessContext } from "./BusinessWorkspace";
 
@@ -133,6 +137,98 @@ function ServicePrioritySelect({ service }: { service: BusinessService }) {
         <option key={val} value={val}>{label}</option>
       ))}
     </select>
+  );
+}
+
+// Order the structured dimensions are shown in under each Service Map item.
+const FACET_DISPLAY_ORDER: FacetDimension[] = [
+  "services",
+  "projectTypes",
+  "markets",
+  "audiences",
+  "offerings",
+  "positioning",
+  "geographies",
+  "needs"
+];
+
+function facetChipStyle(v: FacetValue): Record<string, string | number> {
+  return {
+    display: "inline-block",
+    padding: "1px 7px",
+    borderRadius: 999,
+    fontSize: "0.72rem",
+    border: v.provenance === "ai_inference" ? "1px dashed var(--color-border)" : "1px solid var(--color-border)",
+    color: v.provenance === "ai_inference" ? "var(--color-text-muted)" : "var(--color-text)"
+  };
+}
+
+function shortUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    return u.pathname === "/" ? u.hostname : u.pathname;
+  } catch {
+    return url;
+  }
+}
+
+// The structured interpretation underneath an item's human-readable name.
+// Read-only on purpose: the owner confirms/rejects/edits the item itself,
+// and these dimensions stay system-generated (with provenance on hover)
+// unless a real need to hand-edit them shows up.
+function ServiceFacetsView({ service }: { service: BusinessService }) {
+  const facets = service.facets;
+  const rows = FACET_DISPLAY_ORDER.filter((dim) => facets?.[dim] && facets[dim]!.length > 0);
+  const evidence = service.evidenceSources && service.evidenceSources.length > 0 ? service.evidenceSources : null;
+
+  return (
+    <div style={{ marginTop: 4 }}>
+      {rows.length > 0 ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          {rows.map((dim) => (
+            <div key={dim} style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
+              <span className="text-dim" style={{ fontSize: "0.72rem", minWidth: 64 }}>{FACET_DIMENSION_LABELS[dim]}:</span>
+              {facets![dim]!.map((v) => (
+                <span
+                  key={v.value}
+                  style={facetChipStyle(v)}
+                  title={`${FACET_PROVENANCE_LABELS[v.provenance]}${v.sourceUrl ? ` · ${v.sourceUrl}` : ""}`}
+                >
+                  {v.value}
+                </span>
+              ))}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-dim" style={{ fontSize: "0.72rem" }}>אין עדיין פירוק מבני - יתווסף בהרצת הניתוח הבאה</div>
+      )}
+
+      {evidence ? (
+        <details style={{ marginTop: 4 }}>
+          <summary className="text-dim" style={{ fontSize: "0.72rem", cursor: "pointer" }}>עדויות ומקורות ({evidence.length})</summary>
+          <ul style={{ margin: "4px 0 0", paddingInlineStart: 18, fontSize: "0.72rem" }}>
+            {evidence.map((e, i) => (
+              <li key={i} className="text-dim">
+                "{e.quote}"
+                {e.sourceUrl && (
+                  <>
+                    {" — "}
+                    <a href={e.sourceUrl} target="_blank" rel="noreferrer">{shortUrl(e.sourceUrl)}</a>
+                  </>
+                )}
+                {!e.verified && " (לא אומת מול טקסט האתר)"}
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : (
+        service.evidence &&
+        service.evidence.length > 0 && (
+          <div className="text-dim" style={{ fontSize: "0.72rem", marginTop: 2 }}>עדות: {service.evidence.slice(0, 2).join(" · ")}</div>
+        )
+      )}
+    </div>
   );
 }
 
@@ -368,6 +464,13 @@ export default function BusinessTopics() {
       )}
 
       {services !== null && services.length > 0 && (
+        <p className="text-dim" style={{ fontSize: "0.72rem", marginBottom: 6 }}>
+          מתחת לכל פריט מוצג הפירוק המבני שהמערכת הסיקה. מסגרת רציפה = מופיע באתר או הוזן ע״י בעל/ת העסק · מסגרת מקווקוות =
+          פרשנות AI. ריחוף מעל ערך מציג את מקורו.
+        </p>
+      )}
+
+      {services !== null && services.length > 0 && (
         <div className="data-table-wrap">
           <table className="data-table">
             <thead>
@@ -385,11 +488,7 @@ export default function BusinessTopics() {
                   <td>
                     <strong>{s.name}</strong>
                     {s.description && <div className="text-muted" style={{ fontSize: "0.78rem", marginTop: 2 }}>{s.description}</div>}
-                    {s.evidence && s.evidence.length > 0 && (
-                      <div className="text-dim" style={{ fontSize: "0.72rem", marginTop: 2 }}>
-                        עדות: {s.evidence.slice(0, 2).join(" · ")}
-                      </div>
-                    )}
+                    <ServiceFacetsView service={s} />
                   </td>
                   <td className="text-muted">{SERVICE_SOURCE_LABELS[s.source]}</td>
                   <td><ServicePrioritySelect service={s} /></td>

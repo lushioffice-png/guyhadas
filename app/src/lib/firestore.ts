@@ -229,6 +229,14 @@ export async function createManualService(businessId: string, name: string, desc
     priority: "medium",
     geographies: geographies || [],
     evidence: [],
+    // Same deterministic owner facets the server gives onboarding services
+    // (functions/serviceFacets.js ownerFacets) - the owner's own words are
+    // the core service; nothing else is guessed.
+    facets: {
+      services: [{ value: name, provenance: "owner", sourceUrl: null }],
+      geographies: (geographies || []).map((g) => ({ value: g, provenance: "owner", sourceUrl: null }))
+    },
+    facetsVersion: 2,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
   });
