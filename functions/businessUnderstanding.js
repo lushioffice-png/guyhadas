@@ -245,7 +245,11 @@ function computeActualCostUsd(inputTokens, outputTokens) {
 exports.visibilityAnalyzeBusiness = functions
   // 300s: a crawl of up to 15 pages (8s timeout each, 5 at a time) plus the
   // Claude call no longer fits safely in the 60s default.
-  .runWith({ secrets: ["ANTHROPIC_API_KEY"], timeoutSeconds: 300 })
+  // memory 1GB: the shared functions bundle loads googleapis at startup, so
+  // the 256MB default left too little room for a 15-page crawl - a live
+  // run on 2026-10-07 crashed with "Memory limit of 256 MiB exceeded"
+  // mid-crawl (the browser saw only "Failed to fetch").
+  .runWith({ secrets: ["ANTHROPIC_API_KEY"], timeoutSeconds: 300, memory: "1GB" })
   .https.onRequest(async (req, res) => {
     setCors(res);
     if (req.method === "OPTIONS") {
