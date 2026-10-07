@@ -72,6 +72,14 @@ const ANTHROPIC_MODEL = "claude-sonnet-5-5";
 // again as usual. v2 = structured facets + per-quote source URLs.
 // v3 = multi-page crawl + per-page evidence attribution rules.
 const SERVICE_PROMPT_VERSION = 3;
+// Version of the deterministic pipeline around the Claude call - the crawl,
+// evidence extraction and the contract for how a result is merged into the
+// Service Map. Part of the cache identity (with the model and the input
+// hash, which already includes the prompt version). Bump it when that
+// pipeline changes in a way that should invalidate cached AI results even
+// though the website content didn't change. v1 = the pipeline as of
+// 2026-10-07 (multi-page crawl, page-level provenance).
+const ANALYSIS_VERSION = 1;
 
 function isAiConfigured() {
   return !!process.env.ANTHROPIC_API_KEY;
@@ -185,11 +193,20 @@ async function proposeServicesWithAi(prompt) {
   if (!res.ok) {
     throw new Error(`Anthropic API error: ${json?.error?.message || res.statusText}`);
   }
+  // Token usage is known as soon as a reply arrives - attach it to any
+  // failure below so a failed (but billed) call is still recorded with its
+  // real cost on the ledger.
+  const usage = {
+    inputTokens: json.usage && typeof json.usage.input_tokens === "number" ? json.usage.input_tokens : null,
+    outputTokens: json.usage && typeof json.usage.output_tokens === "number" ? json.usage.output_tokens : null,
+    requestId: json.id || null
+  };
+  const fail = (message) => Object.assign(new Error(message), { usage });
   const text = (json.content || []).map((block) => block.text || "").join("");
   // A reply that hit the output limit is cut off mid-JSON. Say that plainly
   // instead of surfacing it as a confusing parse error.
   if (json.stop_reason === "max_tokens") {
-    throw new Error(
+    throw fail(
       `AI reply was cut off at the ${ANTHROPIC_MAX_TOKENS}-token output limit before it finished (${json.usage?.output_tokens ?? "?"} tokens written) - the result was not used`
     );
   }
@@ -206,16 +223,11 @@ async function proposeServicesWithAi(prompt) {
   try {
     parsed = JSON.parse(candidate);
   } catch (err) {
-    throw new Error(`Could not parse AI response as JSON: ${text.slice(0, 200)}`);
+    throw fail(`Could not parse AI response as JSON: ${text.slice(0, 200)}`);
   }
   if (!Array.isArray(parsed)) {
-    throw new Error("AI response was not a JSON array");
+    throw fail("AI response was not a JSON array");
   }
-  const usage = {
-    inputTokens: json.usage && typeof json.usage.input_tokens === "number" ? json.usage.input_tokens : null,
-    outputTokens: json.usage && typeof json.usage.output_tokens === "number" ? json.usage.output_tokens : null,
-    requestId: json.id || null
-  };
   return { proposals: parsed, usage };
 }
 
@@ -402,6 +414,7 @@ exports.visibilityAnalyzeBusiness = functions
         provider: "anthropic",
         analysisType: "service_map",
         promptVersion: SERVICE_PROMPT_VERSION,
+        analysisVersion: ANALYSIS_VERSION,
         model: ANTHROPIC_MODEL,
         inputHash: null,
         cacheDecision: aiAvailable ? null : "not_applicable",
@@ -449,14 +462,22 @@ exports.visibilityAnalyzeBusiness = functions
             // `model` below rather than the hash.
             input: { promptVersion: SERVICE_PROMPT_VERSION, ownerNames, pagesEvidence },
             model: ANTHROPIC_MODEL,
+            analysisVersion: ANALYSIS_VERSION,
             forceRefresh: forceRefresh === true,
             estimateCost: (input) =>
               estimatePreCallCostUsd(buildServiceInferencePrompt(business, knownNames, rejectedNames, input.pagesEvidence)),
             execute: async (input) => {
               const prompt = buildServiceInferencePrompt(business, knownNames, rejectedNames, input.pagesEvidence);
-              const { proposals, usage } = await proposeServicesWithAi(prompt);
-              const actualCostUsd = computeActualCostUsd(usage.inputTokens, usage.outputTokens);
-              return { result: proposals, usage: { ...usage, actualCostUsd } };
+              try {
+                const { proposals, usage } = await proposeServicesWithAi(prompt);
+                const actualCostUsd = computeActualCostUsd(usage.inputTokens, usage.outputTokens);
+                return { result: proposals, usage: { ...usage, actualCostUsd } };
+              } catch (err) {
+                // A billed reply that failed (cut off / malformed) still has a
+                // real cost - pass it to the ledger.
+                if (err.usage) err.usage.actualCostUsd = computeActualCostUsd(err.usage.inputTokens, err.usage.outputTokens);
+                throw err;
+              }
             }
           });
 
@@ -485,7 +506,10 @@ exports.visibilityAnalyzeBusiness = functions
                 known.find((s) => jaccard(tokens, s.tokens) >= SERVICE_MERGE_THRESHOLD);
               if (match && match.ownerStatus === "rejected") continue; // never resurrect what the owner rejected
               const facets = sanitizeAiFacets(p.facets, corpus);
-              const evidenceSources = sanitizeAiEvidence(p.evidence, corpus);
+              // Each quote keeps its page, provenance and a stable link to the
+              // analysis it came from (the input hash - identical on every
+              // free re-run, unlike a timestamp).
+              const evidenceSources = sanitizeAiEvidence(p.evidence, corpus).map((e) => ({ ...e, analysisInputHash: governed.inputHash }));
               const evidence = evidenceSources.map((e) => e.quote);
               const sourceUrls = [...new Set(evidenceSources.map((e) => e.sourceUrl).filter(Boolean))];
               const geographies = facets.geographies.map((g) => g.value);
@@ -506,16 +530,15 @@ exports.visibilityAnalyzeBusiness = functions
                 const mergedFacets = mergeFacets(baseFacets, facets);
                 const updateData = { updatedAt: now, facets: mergedFacets, facetsVersion: SERVICE_PROMPT_VERSION };
                 if (match.source === "owner") updateData.source = "combined";
-                if (supersedes) {
+                // AI-derived evidence always reflects the latest analysis of the
+                // site: replaced, never appended (appending would accumulate
+                // stale or duplicate quotes across runs). The owner's own
+                // facet values are kept above; owner items have no evidence of
+                // their own to lose.
+                if (supersedes || evidenceSources.length > 0) {
                   updateData.evidence = evidence;
                   updateData.evidenceSources = evidenceSources;
                   updateData.sourceUrls = sourceUrls;
-                } else {
-                  if (evidence.length > 0) {
-                    updateData.evidence = admin.firestore.FieldValue.arrayUnion(...evidence);
-                    updateData.evidenceSources = admin.firestore.FieldValue.arrayUnion(...evidenceSources);
-                  }
-                  if (sourceUrls.length > 0) updateData.sourceUrls = admin.firestore.FieldValue.arrayUnion(...sourceUrls);
                 }
                 await db.collection("businessServices").doc(match.id).update(updateData);
                 match.facets = mergedFacets;

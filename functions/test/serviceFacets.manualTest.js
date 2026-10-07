@@ -74,8 +74,8 @@ const evidence = sanitizeAiEvidence(
   ],
   corpus
 );
-assert.deepStrictEqual(evidence[0], { quote: "שיפוץ קומפלט למגורים", sourceUrl: "https://example.co.il/renovation", verified: true });
-assert.deepStrictEqual(evidence[1], { quote: "a quote that is nowhere on the site", sourceUrl: null, verified: false });
+assert.deepStrictEqual(evidence[0], { quote: "שיפוץ קומפלט למגורים", sourceUrl: "https://example.co.il/renovation", verified: true, provenance: "website" });
+assert.deepStrictEqual(evidence[1], { quote: "a quote that is nowhere on the site", sourceUrl: null, verified: false, provenance: "ai_inference" });
 console.log("PASS: evidence quotes keep a real source URL and are marked verified only when found");
 
 // Regression: the homepage repeats a summary of everything, so text from

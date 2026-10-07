@@ -65,13 +65,24 @@ function getLimits(provider, operation) {
 // that operation ever used before then (documented there), so those rows
 // stay reusable for that model and are never reused for a different one.
 function rowModel(row, limits) {
-  if (row.model !== undefined && row.model !== null) return row.model;
+  // Only a MISSING field means "written before this was recorded"; an
+  // explicit null means "no model" and must match only null.
+  if (row.model !== undefined) return row.model;
   return limits.legacyModel !== undefined ? limits.legacyModel : null;
+}
+
+// Same idea for the analysis version (the version of the deterministic
+// pipeline around the provider call: crawl/extraction/post-processing
+// contract). Rows written before it was recorded count as
+// apiLimits.<op>.legacyAnalysisVersion.
+function rowAnalysisVersion(row, limits) {
+  if (row.analysisVersion !== undefined) return row.analysisVersion;
+  return limits.legacyAnalysisVersion !== undefined ? limits.legacyAnalysisVersion : null;
 }
 
 // Throws if the lookup itself cannot run (e.g. missing index) - the caller
 // turns that into a fail-closed block. Returns the cached row or null.
-async function findCachedUsage({ provider, operation, businessId, inputHash, model, limits }) {
+async function findCachedUsage({ provider, operation, businessId, inputHash, model, analysisVersion, limits }) {
   const db = admin.firestore();
   const snap = await db
     .collection("apiUsage")
@@ -86,6 +97,7 @@ async function findCachedUsage({ provider, operation, businessId, inputHash, mod
   for (const doc of snap.docs) {
     const row = doc.data();
     if (rowModel(row, limits) !== (model ?? null)) continue;
+    if (rowAnalysisVersion(row, limits) !== (analysisVersion ?? null)) continue;
     if (limits.cacheTtlMs != null && Date.now() - row.retrievedAtMs > limits.cacheTtlMs) continue;
     return { id: doc.id, ...row };
   }
@@ -198,6 +210,8 @@ async function recordUsage(record) {
     retryCount: 0,
     errorMessage: null,
     model: null,
+    analysisVersion: null,
+    decision: null,
     forceRefresh: false,
     providerCalled: false,
     cacheHit: false,
@@ -236,28 +250,29 @@ async function recordUsageSafely(record) {
 // decision: "cache_hit" | "cache_miss" | "forced_refresh" |
 //           "blocked_cache_unavailable" | "blocked_safety_check_unavailable" |
 //           "blocked_by_budget" | "blocked_by_quota" | "blocked_by_safety_limit"
-async function runGoverned({ provider, operation, businessId, input, model = null, forceRefresh = false, estimateCost, execute }) {
+async function runGoverned({ provider, operation, businessId, input, model = null, analysisVersion = null, forceRefresh = false, estimateCost, execute }) {
   if (!businessId) throw new Error("runGoverned requires a businessId - every provider call in this app is business-scoped");
   const limits = getLimits(provider, operation);
   const inputHash = hashInput(input);
-  const base = { provider, operation, businessId, inputHash, model, forceRefresh: !!forceRefresh };
-  const outcome = (fields) => ({ ok: false, cacheHit: false, result: null, usage: null, blocked: null, inputHash, model, providerCalled: false, ...fields });
+  const base = { provider, operation, businessId, inputHash, model, analysisVersion, forceRefresh: !!forceRefresh };
+  const outcome = (fields) => ({ ok: false, cacheHit: false, result: null, usage: null, blocked: null, inputHash, model, analysisVersion, providerCalled: false, ...fields });
 
   // 1. Cache lookup - before anything that could spend money.
   if (!forceRefresh) {
     let cached;
     try {
-      cached = await findCachedUsage({ provider, operation, businessId, inputHash, model, limits });
+      cached = await findCachedUsage({ provider, operation, businessId, inputHash, model, analysisVersion, limits });
     } catch (err) {
       const message = `Cache lookup could not be performed (${err.message}). The provider was NOT called.`;
       console.error(`apiUsage FAIL CLOSED ${provider}.${operation}:`, message);
-      await recordUsageSafely({ ...base, status: "blocked_cache_unavailable", errorMessage: message });
+      await recordUsageSafely({ ...base, status: "blocked_cache_unavailable", decision: "blocked_cache_unavailable", errorMessage: message });
       return outcome({ decision: "blocked_cache_unavailable", blocked: { reason: "blocked_cache_unavailable", message } });
     }
     if (cached) {
       await recordUsageSafely({
         ...base,
         status: "cache_hit",
+        decision: "cache_hit",
         cacheHit: true,
         providerCalled: false,
         actualCostUsd: 0,
@@ -273,19 +288,19 @@ async function runGoverned({ provider, operation, businessId, input, model = nul
   try {
     const circuit = await checkCircuitBreaker(provider, operation);
     if (!circuit.allowed) {
-      await recordUsageSafely({ ...base, status: circuit.reason, errorMessage: circuit.message });
+      await recordUsageSafely({ ...base, status: circuit.reason, decision: circuit.reason, errorMessage: circuit.message });
       return outcome({ decision: circuit.reason, blocked: { reason: circuit.reason, message: circuit.message } });
     }
     estimatedCostUsd = estimateCost ? estimateCost(input) : null;
     const budget = await checkBudget({ provider, operation, businessId, estimatedCostUsd, limits });
     if (!budget.allowed) {
-      await recordUsageSafely({ ...base, status: budget.reason, errorMessage: budget.message, estimatedCostUsd });
+      await recordUsageSafely({ ...base, status: budget.reason, decision: budget.reason, errorMessage: budget.message, estimatedCostUsd });
       return outcome({ decision: budget.reason, blocked: { reason: budget.reason, message: budget.message } });
     }
   } catch (err) {
     const message = `A cost/safety check could not be performed (${err.message}). The provider was NOT called.`;
     console.error(`apiUsage FAIL CLOSED ${provider}.${operation}:`, message);
-    await recordUsageSafely({ ...base, status: "blocked_safety_check_unavailable", errorMessage: message });
+    await recordUsageSafely({ ...base, status: "blocked_safety_check_unavailable", decision: "blocked_safety_check_unavailable", errorMessage: message });
     return outcome({ decision: "blocked_safety_check_unavailable", blocked: { reason: "blocked_safety_check_unavailable", message } });
   }
 
@@ -295,6 +310,7 @@ async function runGoverned({ provider, operation, businessId, input, model = nul
     await recordUsage({
       ...base,
       status: "success",
+      decision: missDecision,
       providerCalled: true,
       result: result != null ? result : null,
       requestId: (usage && usage.requestId) || null,
@@ -308,12 +324,26 @@ async function runGoverned({ provider, operation, businessId, input, model = nul
       providerUnitsUsed: usage && usage.providerUnitsUsed != null ? usage.providerUnitsUsed : null
     });
     await recordCircuitResult(provider, operation, true, limits).catch((e) => console.error("apiUsage circuit update failed:", e.message));
-    return { ok: true, cacheHit: false, result, usage: usage || null, blocked: null, inputHash, model, providerCalled: true, decision: missDecision };
+    return { ok: true, cacheHit: false, result, usage: usage || null, blocked: null, inputHash, model, analysisVersion, providerCalled: true, decision: missDecision };
   } catch (err) {
     err.providerCalled = true;
     err.inputHash = inputHash;
     err.decision = missDecision;
-    await recordUsageSafely({ ...base, status: "error", providerCalled: true, errorMessage: err.message, estimatedCostUsd });
+    // A failed call may still have been billed (e.g. a reply cut off at the
+    // output limit) - record its real usage/cost when the provider reported it.
+    const u = err.usage || {};
+    await recordUsageSafely({
+      ...base,
+      status: "error",
+      decision: missDecision,
+      providerCalled: true,
+      errorMessage: err.message,
+      estimatedCostUsd,
+      requestId: u.requestId || null,
+      inputTokens: u.inputTokens != null ? u.inputTokens : null,
+      outputTokens: u.outputTokens != null ? u.outputTokens : null,
+      actualCostUsd: u.actualCostUsd != null ? u.actualCostUsd : null
+    });
     await recordCircuitResult(provider, operation, false, limits).catch((e) => console.error("apiUsage circuit update failed:", e.message));
     throw err;
   }

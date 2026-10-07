@@ -19,6 +19,7 @@ import type { DiscoveryResult } from "../../lib/functions";
 import { KNOWLEDGE_TYPE_LABELS, DISCOVERY_SOURCE_LABELS } from "../../types";
 import type { BusinessKnowledge, SearchTopic, TopicStatus, KnowledgeType, Competitor, BusinessService } from "../../types";
 import type { BusinessContext } from "./BusinessWorkspace";
+import { updateSearchTopicStatus } from "../../lib/firestore";
 import { ConfirmDeleteButton } from "../../components/review/ConfirmDeleteButton";
 import { Badge } from "../../components/review/Badge";
 import { ServiceMapSection } from "./topics/ServiceMapSection";
@@ -157,6 +158,10 @@ export default function BusinessTopics() {
   }
 
   const reviewTopics = (topics || []).filter((t) => REVIEW_STATUSES.includes(t.status));
+  // Topics created by the retired website scan (website words used directly
+  // as search topics - replaced by the Service Map in M3.1). Website =
+  // evidence, never the Search Universe.
+  const legacyWebsiteTopics = reviewTopics.filter((t) => t.source === "website");
   const approvedTopics = (topics || []).filter((t) => APPROVED_STATUSES.includes(t.status));
   const confirmedServices = (services || []).filter((s) => s.ownerStatus === "confirmed");
 
@@ -262,6 +267,26 @@ export default function BusinessTopics() {
         </div>
 
         <h4 className="panel-title" style={{ margin: "var(--space-4) 0 var(--space-3)" }}>לבדיקה</h4>
+        {legacyWebsiteTopics.length > 0 && (
+          <div className="panel tone-warn">
+            <div className="panel-row" style={{ justifyContent: "space-between" }}>
+              <div>
+                <div className="panel-title">{legacyWebsiteTopics.length} נושאים מסריקת האתר הישנה (הוצאה משימוש)</div>
+                <div className="panel-meta">
+                  הם נוצרו ישירות ממילים באתר, לפני שהאתר הפך לעדות למפת השירותים בלבד. אפשר לסמן את כולם כ״הוחרג״ - הפעולה
+                  הפיכה, דרך הסטטוס של כל נושא.
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => Promise.all(legacyWebsiteTopics.map((t) => updateSearchTopicStatus(t.id, "exclude")))}
+              >
+                סימון כולם כ״הוחרג״
+              </button>
+            </div>
+          </div>
+        )}
         {topics === null && <div className="loading-row">טוען…</div>}
         {topics !== null && reviewTopics.length === 0 && (
           <EmptyState title="אין נושאים לבדיקה" subtitle="הרץ/י גילוי למעלה, או הוסף/י נושא ידנית." />

@@ -340,8 +340,10 @@ export type ServiceFacets = Partial<Record<FacetDimension, FacetValue[]>>;
 
 export interface ServiceEvidence {
   quote: string;
-  sourceUrl: string | null;
-  verified: boolean;
+  sourceUrl: string | null; // the page the quote came from - never rewritten
+  verified: boolean; // found verbatim on that page in the crawl
+  provenance?: "website" | "ai_inference"; // absent on evidence stored before 2026-10-07
+  analysisInputHash?: string; // the analysis (cache identity) this evidence came from
 }
 
 export const FACET_DIMENSION_LABELS: Record<FacetDimension, string> = {
@@ -410,6 +412,7 @@ export interface CostControlDecision {
   provider: string;
   analysisType: string;
   promptVersion: number;
+  analysisVersion?: number;
   model: string | null;
   inputHash: string | null;
   cacheDecision: CacheDecision | null;

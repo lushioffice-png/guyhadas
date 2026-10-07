@@ -46,7 +46,10 @@ function CostDecisionLine({ cc }: { cc: CostControlDecision }) {
   return (
     <div className="panel-meta" style={{ marginTop: "var(--space-2)" }}>
       {text}
-      <span className="text-dim"> · מודל {cc.model ?? "—"} · גרסת הנחיה {cc.promptVersion} · מזהה קלט </span>
+      <span className="text-dim">
+        {" "}· מודל {cc.model ?? "—"} · גרסת הנחיה {cc.promptVersion}
+        {cc.analysisVersion != null ? ` · גרסת ניתוח ${cc.analysisVersion}` : ""} · מזהה קלט{" "}
+      </span>
       <span className="url-text" title={cc.inputHash ?? undefined}>{hash}</span>
     </div>
   );

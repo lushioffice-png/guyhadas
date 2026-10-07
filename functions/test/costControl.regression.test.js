@@ -140,6 +140,43 @@ async function test(name, fn) {
     assert.strictEqual(t.calls(), 2);
   });
 
+  await test("H2 same input, different analysis version misses; legacy rows count as v1", async () => {
+    const t = setup();
+    t.fake.seed("apiUsage", {
+      ...OP, businessId: "bizH2", inputHash: t.hashInput(inputA), status: "success", cacheHit: false,
+      result: [{ name: "legacy" }], retrievedAtMs: Date.now() - 1000
+    });
+    const v1 = await t.run("bizH2", inputA, { analysisVersion: 1 });
+    assert.strictEqual(v1.decision, "cache_hit", "a row with no analysisVersion is the legacy v1");
+    const v2 = await t.run("bizH2", inputA, { analysisVersion: 2 });
+    assert.strictEqual(v2.decision, "cache_miss", "a new analysis version invalidates the cached result");
+    assert.strictEqual(t.calls(), 1);
+  });
+
+  await test("failed but billed provider call is recorded with its real tokens and cost", async () => {
+    const fake = createFakeFirestore();
+    const { runGoverned } = loadWithFake(fake, APIUSAGE);
+    const execute = async () => {
+      throw Object.assign(new Error("AI reply was cut off"), { usage: { inputTokens: 10377, outputTokens: 12000, requestId: "msg_x", actualCostUsd: 0.1408 } });
+    };
+    await assert.rejects(runGoverned({ ...OP, businessId: "bizErr", input: inputA, model: MODEL, execute }));
+    const row = fake.rows("apiUsage").find((r) => r.status === "error");
+    assert.strictEqual(row.providerCalled, true);
+    assert.strictEqual(row.actualCostUsd, 0.1408);
+    assert.strictEqual(row.inputTokens, 10377);
+    assert.strictEqual(row.decision, "cache_miss");
+    const again = await runGoverned({ ...OP, businessId: "bizErr", input: inputA, model: MODEL, execute: async () => ({ result: [1], usage: {} }) });
+    assert.strictEqual(again.decision, "cache_miss", "a failed call is never cached as a result");
+  });
+
+  await test("every ledger row records its decision", async () => {
+    const t = setup();
+    await t.run("bizDec", inputA);
+    await t.run("bizDec", inputA);
+    const decisions = t.fake.rows("apiUsage").map((r) => `${r.status}:${r.decision}`);
+    assert.deepStrictEqual(decisions, ["success:cache_miss", "cache_hit:cache_hit"]);
+  });
+
   await test("I returning to a previous input state reuses its earlier result", async () => {
     const t = setup();
     const a1 = await t.run("bizI", inputA);
@@ -164,11 +201,12 @@ async function test(name, fn) {
       actualCostUsd: 0.0917,
       retrievedAtMs: Date.now() - 3 * 60 * 60 * 1000
     });
-    const r = await t.run("bizLegacy", inputA);
+    // Exactly what businessUnderstanding.js sends in production.
+    const r = await t.run("bizLegacy", inputA, { analysisVersion: 1 });
     assert.strictEqual(r.decision, "cache_hit", "the existing paid result must be reusable after the fix");
     assert.deepStrictEqual(r.result, [{ name: "from-legacy-row" }]);
     assert.strictEqual(t.calls(), 0);
-    const other = await t.run("bizLegacy", inputA, { model: "claude-opus-5-5" });
+    const other = await t.run("bizLegacy", inputA, { model: "claude-opus-5-5", analysisVersion: 1 });
     assert.strictEqual(other.decision, "cache_miss", "a legacy row is never reused for a different model");
   });
 
