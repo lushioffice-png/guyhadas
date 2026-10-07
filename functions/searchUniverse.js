@@ -312,6 +312,7 @@ exports.visibilityDiscoverFromSemrush = functions
         input: { seed: normalizedSeed, database: db_, domain },
         model: null, // Semrush has no model; reports are fixed (see functions/semrush.js)
         forceRefresh: forceRefresh === true,
+        reason: forceRefresh === true ? "owner_confirmed_new_paid_semrush_discovery" : "owner_requested_semrush_discovery",
         execute: async () => {
           const [related, ownKeywords, competitors] = await Promise.all([
             semrush.fetchRelatedKeywords(seedPhrase, db_, 30),

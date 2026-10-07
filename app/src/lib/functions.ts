@@ -148,6 +148,8 @@ export interface AnalyzeBusinessResult {
   aiCostUsd: number | null;
   // null when the business has no website set.
   crawl: CrawlReport | null;
+  // AI proposals that matched an owner-rejected item and were ignored.
+  aiRejectedSkipped?: number;
   costControl: CostControlDecision;
   status: "completed" | "blocked" | "ai_error";
   analysisRunId: string | null;

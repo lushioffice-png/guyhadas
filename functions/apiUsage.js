@@ -212,6 +212,7 @@ async function recordUsage(record) {
     model: null,
     analysisVersion: null,
     decision: null,
+    reason: null,
     forceRefresh: false,
     providerCalled: false,
     cacheHit: false,
@@ -250,11 +251,13 @@ async function recordUsageSafely(record) {
 // decision: "cache_hit" | "cache_miss" | "forced_refresh" |
 //           "blocked_cache_unavailable" | "blocked_safety_check_unavailable" |
 //           "blocked_by_budget" | "blocked_by_quota" | "blocked_by_safety_limit"
-async function runGoverned({ provider, operation, businessId, input, model = null, analysisVersion = null, forceRefresh = false, estimateCost, execute }) {
+async function runGoverned({ provider, operation, businessId, input, model = null, analysisVersion = null, forceRefresh = false, reason = null, estimateCost, execute }) {
   if (!businessId) throw new Error("runGoverned requires a businessId - every provider call in this app is business-scoped");
   const limits = getLimits(provider, operation);
   const inputHash = hashInput(input);
-  const base = { provider, operation, businessId, inputHash, model, analysisVersion, forceRefresh: !!forceRefresh };
+  // `reason`: why this operation was requested (master architecture §35) -
+  // recorded on every ledger row for audit.
+  const base = { provider, operation, businessId, inputHash, model, analysisVersion, forceRefresh: !!forceRefresh, reason };
   const outcome = (fields) => ({ ok: false, cacheHit: false, result: null, usage: null, blocked: null, inputHash, model, analysisVersion, providerCalled: false, ...fields });
 
   // 1. Cache lookup - before anything that could spend money.

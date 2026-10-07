@@ -180,6 +180,9 @@ function AnalysisResult({ result }: { result: AnalyzeBusinessResult }) {
         {result.aiAvailable && <span><strong>{result.aiServicesProposed}</strong>פריטים חדשים לבדיקה</span>}
         {result.aiAvailable && <span><strong>{result.aiServicesMerged}</strong>פריטים קיימים עודכנו</span>}
         <span><strong>{result.ownerServicesSeeded}</strong>נוספו מהקמת העסק</span>
+        {!!result.aiRejectedSkipped && (
+          <span><strong>{result.aiRejectedSkipped}</strong>הצעות תאמו פריטים שנדחו - לא הוחזרו</span>
+        )}
       </div>
       {!result.aiAvailable && (
         <div className="panel-meta" style={{ marginTop: "var(--space-2)" }}>ניתוח AI אינו מוגדר - נקלטו רק שירותים שהוזנו בהקמת העסק.</div>
