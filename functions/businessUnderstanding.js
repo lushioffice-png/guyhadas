@@ -44,18 +44,10 @@ const { setCors, requireAdmin } = require("./visibility");
 const { tokenize, jaccard } = require("./textSimilarity");
 const { crawlSite } = require("./webUtils");
 const { runGoverned } = require("./apiUsage");
+const { parseAiServiceReply, mergeProposals, SERVICE_MERGE_THRESHOLD } = require("./serviceMapMerge");
 const apiLimits = require("./apiLimits");
-const {
-  buildPageCorpus,
-  sanitizeAiFacets,
-  sanitizeAiEvidence,
-  ownerFacets,
-  mergeFacets,
-  keepOwnerFacets,
-  hasAnyFacet
-} = require("./serviceFacets");
+const { buildPageCorpus, ownerFacets, hasAnyFacet } = require("./serviceFacets");
 
-const SERVICE_MERGE_THRESHOLD = 0.6; // tighter than Search Topics' 0.5 - service names are short, so a looser threshold would wrongly merge distinct services that just share one word (e.g. "עיצוב פנים" / "עיצוב גרפי")
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 // 12000: with a multi-page crawl (up to 15 pages) a full structured reply in
 // Hebrew ran past 4096 tokens and was cut off mid-JSON (2026-10-07). Hebrew
@@ -72,6 +64,14 @@ const ANTHROPIC_MODEL = "claude-sonnet-5-5";
 // again as usual. v2 = structured facets + per-quote source URLs.
 // v3 = multi-page crawl + per-page evidence attribution rules.
 const SERVICE_PROMPT_VERSION = 3;
+// Version of the deterministic pipeline around the Claude call - the crawl,
+// evidence extraction and the contract for how a result is merged into the
+// Service Map. Part of the cache identity (with the model and the input
+// hash, which already includes the prompt version). Bump it when that
+// pipeline changes in a way that should invalidate cached AI results even
+// though the website content didn't change. v1 = the pipeline as of
+// 2026-10-07 (multi-page crawl, page-level provenance).
+const ANALYSIS_VERSION = 1;
 
 function isAiConfigured() {
   return !!process.env.ANTHROPIC_API_KEY;
@@ -182,41 +182,7 @@ async function proposeServicesWithAi(prompt) {
     })
   });
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(`Anthropic API error: ${json?.error?.message || res.statusText}`);
-  }
-  const text = (json.content || []).map((block) => block.text || "").join("");
-  // A reply that hit the output limit is cut off mid-JSON. Say that plainly
-  // instead of surfacing it as a confusing parse error.
-  if (json.stop_reason === "max_tokens") {
-    throw new Error(
-      `AI reply was cut off at the ${ANTHROPIC_MAX_TOKENS}-token output limit before it finished (${json.usage?.output_tokens ?? "?"} tokens written) - the result was not used`
-    );
-  }
-  const cleaned = text
-    .trim()
-    .replace(/^```json\s*/i, "")
-    .replace(/^```\s*/i, "")
-    .replace(/```\s*$/i, "");
-  // Tolerate a stray sentence before/after the array.
-  const start = cleaned.indexOf("[");
-  const end = cleaned.lastIndexOf("]");
-  const candidate = start >= 0 && end > start ? cleaned.slice(start, end + 1) : cleaned;
-  let parsed;
-  try {
-    parsed = JSON.parse(candidate);
-  } catch (err) {
-    throw new Error(`Could not parse AI response as JSON: ${text.slice(0, 200)}`);
-  }
-  if (!Array.isArray(parsed)) {
-    throw new Error("AI response was not a JSON array");
-  }
-  const usage = {
-    inputTokens: json.usage && typeof json.usage.input_tokens === "number" ? json.usage.input_tokens : null,
-    outputTokens: json.usage && typeof json.usage.output_tokens === "number" ? json.usage.output_tokens : null,
-    requestId: json.id || null
-  };
-  return { proposals: parsed, usage };
+  return parseAiServiceReply(res, json, ANTHROPIC_MAX_TOKENS);
 }
 
 // Pre-call budget gate, BEFORE anything is sent to Claude. Deliberately a
@@ -391,6 +357,7 @@ exports.visibilityAnalyzeBusiness = functions
       // confirmed/rejected.
       let aiServicesProposed = 0;
       let aiServicesMerged = 0;
+      let aiRejectedSkipped = 0; // proposals matching an owner-rejected item, ignored
       let aiError = null;
       let aiBlockedReason = null;
       let aiCacheHit = false;
@@ -402,6 +369,7 @@ exports.visibilityAnalyzeBusiness = functions
         provider: "anthropic",
         analysisType: "service_map",
         promptVersion: SERVICE_PROMPT_VERSION,
+        analysisVersion: ANALYSIS_VERSION,
         model: ANTHROPIC_MODEL,
         inputHash: null,
         cacheDecision: aiAvailable ? null : "not_applicable",
@@ -449,14 +417,23 @@ exports.visibilityAnalyzeBusiness = functions
             // `model` below rather than the hash.
             input: { promptVersion: SERVICE_PROMPT_VERSION, ownerNames, pagesEvidence },
             model: ANTHROPIC_MODEL,
+            analysisVersion: ANALYSIS_VERSION,
             forceRefresh: forceRefresh === true,
+            reason: forceRefresh === true ? "owner_confirmed_new_paid_service_analysis" : "owner_requested_service_analysis",
             estimateCost: (input) =>
               estimatePreCallCostUsd(buildServiceInferencePrompt(business, knownNames, rejectedNames, input.pagesEvidence)),
             execute: async (input) => {
               const prompt = buildServiceInferencePrompt(business, knownNames, rejectedNames, input.pagesEvidence);
-              const { proposals, usage } = await proposeServicesWithAi(prompt);
-              const actualCostUsd = computeActualCostUsd(usage.inputTokens, usage.outputTokens);
-              return { result: proposals, usage: { ...usage, actualCostUsd } };
+              try {
+                const { proposals, usage } = await proposeServicesWithAi(prompt);
+                const actualCostUsd = computeActualCostUsd(usage.inputTokens, usage.outputTokens);
+                return { result: proposals, usage: { ...usage, actualCostUsd } };
+              } catch (err) {
+                // A billed reply that failed (cut off / malformed) still has a
+                // real cost - pass it to the ledger.
+                if (err.usage) err.usage.actualCostUsd = computeActualCostUsd(err.usage.inputTokens, err.usage.outputTokens);
+                throw err;
+              }
             }
           });
 
@@ -473,78 +450,20 @@ exports.visibilityAnalyzeBusiness = functions
             aiError = governed.blocked.message;
           } else {
             if (!governed.cacheHit && governed.usage) aiCostUsd = governed.usage.actualCostUsd;
-            const proposals = Array.isArray(governed.result) ? governed.result : [];
-
-            for (const p of proposals) {
-              const name = (p && p.name ? p.name : "").trim();
-              if (!name) continue;
-              const tokens = tokenize(name);
-              const existingName = p && typeof p.existingName === "string" ? p.existingName.trim() : "";
-              const match =
-                (existingName && known.find((s) => s.name === existingName)) ||
-                known.find((s) => jaccard(tokens, s.tokens) >= SERVICE_MERGE_THRESHOLD);
-              if (match && match.ownerStatus === "rejected") continue; // never resurrect what the owner rejected
-              const facets = sanitizeAiFacets(p.facets, corpus);
-              const evidenceSources = sanitizeAiEvidence(p.evidence, corpus);
-              const evidence = evidenceSources.map((e) => e.quote);
-              const sourceUrls = [...new Set(evidenceSources.map((e) => e.sourceUrl).filter(Boolean))];
-              const geographies = facets.geographies.map((g) => g.value);
-
-              if (match) {
-                // Attach structure to the existing item rather than creating
-                // a near-duplicate. Its name, description, status and
-                // priority are left exactly as they are - only facets and
-                // evidence are added. Owner-provenance facet values always
-                // win over AI ones (mergeFacets).
-                // An item last analyzed under an older prompt/crawl version
-                // has its AI-derived facets and evidence REPLACED, not
-                // appended to: v2 and earlier only ever crawled the
-                // homepage, so their page attribution is superseded by this
-                // run's. Owner-provenance facet values are always kept.
-                const supersedes = (match.facetsVersion || 0) < SERVICE_PROMPT_VERSION;
-                const baseFacets = supersedes ? keepOwnerFacets(match.facets) : match.facets;
-                const mergedFacets = mergeFacets(baseFacets, facets);
-                const updateData = { updatedAt: now, facets: mergedFacets, facetsVersion: SERVICE_PROMPT_VERSION };
-                if (match.source === "owner") updateData.source = "combined";
-                if (supersedes) {
-                  updateData.evidence = evidence;
-                  updateData.evidenceSources = evidenceSources;
-                  updateData.sourceUrls = sourceUrls;
-                } else {
-                  if (evidence.length > 0) {
-                    updateData.evidence = admin.firestore.FieldValue.arrayUnion(...evidence);
-                    updateData.evidenceSources = admin.firestore.FieldValue.arrayUnion(...evidenceSources);
-                  }
-                  if (sourceUrls.length > 0) updateData.sourceUrls = admin.firestore.FieldValue.arrayUnion(...sourceUrls);
-                }
-                await db.collection("businessServices").doc(match.id).update(updateData);
-                match.facets = mergedFacets;
-                match.facetsVersion = SERVICE_PROMPT_VERSION;
-                if (match.source === "owner") match.source = "combined";
-                aiServicesMerged++;
-                continue;
-              }
-
-              const ref = await db.collection("businessServices").add({
-                businessId,
-                name,
-                description: typeof p.description === "string" ? p.description : "",
-                source: "ai_inference",
-                confidence: "inferred",
-                ownerStatus: "needs_review",
-                priority: "medium",
-                geographies,
-                evidence,
-                evidenceSources,
-                sourceUrls,
-                facets,
-                facetsVersion: SERVICE_PROMPT_VERSION,
-                createdAt: now,
-                updatedAt: now
-              });
-              known.push({ id: ref.id, name, source: "ai_inference", ownerStatus: "needs_review", facets, tokens });
-              aiServicesProposed++;
-            }
+            const mergeResult = await mergeProposals({
+              db,
+              businessId,
+              known,
+              proposals: governed.result,
+              corpus,
+              inputHash: governed.inputHash,
+              now,
+              verifiedAt: new Date().toISOString(),
+              facetsVersion: SERVICE_PROMPT_VERSION
+            });
+            aiServicesProposed = mergeResult.proposed;
+            aiServicesMerged = mergeResult.merged;
+            aiRejectedSkipped = mergeResult.skippedRejected;
           }
         } catch (aiErr) {
           console.error("visibilityAnalyzeBusiness AI step failed:", aiErr.message);
@@ -565,6 +484,7 @@ exports.visibilityAnalyzeBusiness = functions
         ownerServicesSeeded,
         aiServicesProposed,
         aiServicesMerged,
+        aiRejectedSkipped,
         pagesScanned: pagesEvidence.length,
         aiAvailable,
         aiError,

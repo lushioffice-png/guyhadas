@@ -80,7 +80,7 @@ function Evidence({ service }: { service: BusinessService }) {
             ) : (
               <span>לא נקשר לעמוד מסוים</span>
             )}
-            {e.verified ? (
+            {(e.provenance ? e.provenance === "website" : e.verified) ? (
               <Badge tone="info" icon="◆" title="הציטוט נמצא כלשונו בטקסט של העמוד שנסרק.">נמצא בעמוד</Badge>
             ) : (
               <Badge tone="outline" icon="~" title="הציטוט לא נמצא כלשונו בטקסט שנסרק - ייתכן שזו פרפרזה של ה-AI.">לא אומת מול טקסט העמוד</Badge>
@@ -211,7 +211,14 @@ export function ServiceCard({ service }: { service: BusinessService }) {
                   עריכה
                 </button>
               )}
-              <ConfirmDeleteButton onConfirm={() => deleteBusinessService(service.id)} />
+              <ConfirmDeleteButton
+                onConfirm={() => deleteBusinessService(service.id)}
+                note={
+                  service.ownerStatus === "rejected"
+                    ? "מחיקה מסירה גם את הסימון כנדחה - הניתוח הבא עלול להציע אותו שוב."
+                    : "הניתוח הבא עלול ליצור אותו מחדש. כדי שלא יחזור - השתמש/י ב'דחייה'."
+                }
+              />
             </>
           )}
         </div>

@@ -132,7 +132,9 @@ function sanitizeAiEvidence(rawEvidence, corpus) {
     const quote = (typeof raw === "string" ? raw : raw && raw.quote ? raw.quote : "").trim();
     if (!quote) continue;
     const src = resolveSource(corpus, quote, raw && raw.url);
-    out.push({ quote, sourceUrl: src.sourceUrl, verified: src.verified });
+    // provenance: "website" when the quote was found verbatim on the cited
+    // page in this crawl, otherwise "ai_inference" (an AI paraphrase).
+    out.push({ quote, sourceUrl: src.sourceUrl, verified: src.verified, provenance: src.verified ? "website" : "ai_inference" });
     if (out.length >= MAX_EVIDENCE) break;
   }
   return out;

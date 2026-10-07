@@ -26,6 +26,9 @@ module.exports = {
       // are never reused for a different one. Do not change this value when
       // switching models - change ANTHROPIC_MODEL in businessUnderstanding.js.
       legacyModel: "claude-sonnet-5-5",
+      // Same for the analysis version (see ANALYSIS_VERSION in
+      // businessUnderstanding.js): rows from before it was recorded are v1.
+      legacyAnalysisVersion: 1,
       inputPricePerMTokUsd: 2,
       outputPricePerMTokUsd: 10,
       maxEstimatedCostPerCallUsd: 0.5,

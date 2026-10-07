@@ -121,6 +121,11 @@ function createFakeFirestore({ indexes } = {}) {
               const found = docsFor(name).find((d) => d.id === id);
               return { exists: !!found, data: () => found && found.data };
             },
+            async update(data) {
+              const found = docsFor(name).find((d) => d.id === id);
+              if (!found) throw new Error(`NOT_FOUND: ${name}/${id}`);
+              Object.assign(found.data, data);
+            },
             async set(data, opts) {
               const found = docsFor(name).find((d) => d.id === id);
               if (found && opts && opts.merge) Object.assign(found.data, data);
