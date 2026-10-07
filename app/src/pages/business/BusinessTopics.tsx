@@ -152,15 +152,28 @@ const FACET_DISPLAY_ORDER: FacetDimension[] = [
   "needs"
 ];
 
+// Three provenances, three distinct treatments - owner and website are
+// never shown as the same thing:
+//   owner        - filled chip, solid border (the owner said it)
+//   website      - outlined chip, solid border (found in the site's text)
+//   ai_inference - outlined chip, dashed border, muted text (interpretation)
+// A small marker character repeats the distinction for anyone who can't
+// rely on border style alone, and the tooltip names the provenance.
+const FACET_PROVENANCE_MARKERS: Record<FacetValue["provenance"], string> = {
+  owner: "●",
+  website: "◆",
+  ai_inference: "~"
+};
+
 function facetChipStyle(v: FacetValue): Record<string, string | number> {
-  return {
-    display: "inline-block",
-    padding: "1px 7px",
-    borderRadius: 999,
-    fontSize: "0.72rem",
-    border: v.provenance === "ai_inference" ? "1px dashed var(--color-border)" : "1px solid var(--color-border)",
-    color: v.provenance === "ai_inference" ? "var(--color-text-muted)" : "var(--color-text)"
-  };
+  const base = { display: "inline-block", padding: "1px 7px", borderRadius: 999, fontSize: "0.72rem" };
+  if (v.provenance === "owner") {
+    return { ...base, border: "1px solid var(--color-border)", background: "var(--color-border)", color: "var(--color-text)" };
+  }
+  if (v.provenance === "website") {
+    return { ...base, border: "1px solid var(--color-border)", color: "var(--color-text)" };
+  }
+  return { ...base, border: "1px dashed var(--color-border)", color: "var(--color-text-muted)" };
 }
 
 function shortUrl(url: string): string {
@@ -194,6 +207,7 @@ function ServiceFacetsView({ service }: { service: BusinessService }) {
                   style={facetChipStyle(v)}
                   title={`${FACET_PROVENANCE_LABELS[v.provenance]}${v.sourceUrl ? ` · ${v.sourceUrl}` : ""}`}
                 >
+                  <span aria-hidden="true" style={{ opacity: 0.7, marginInlineEnd: 3 }}>{FACET_PROVENANCE_MARKERS[v.provenance]}</span>
                   {v.value}
                 </span>
               ))}
@@ -465,8 +479,8 @@ export default function BusinessTopics() {
 
       {services !== null && services.length > 0 && (
         <p className="text-dim" style={{ fontSize: "0.72rem", marginBottom: 6 }}>
-          מתחת לכל פריט מוצג הפירוק המבני שהמערכת הסיקה. מסגרת רציפה = מופיע באתר או הוזן ע״י בעל/ת העסק · מסגרת מקווקוות =
-          פרשנות AI. ריחוף מעל ערך מציג את מקורו.
+          מתחת לכל פריט מוצג הפירוק המבני שהמערכת הסיקה. ● מלא = הוזן ע״י בעל/ת העסק · ◆ מסגרת רציפה = מופיע בטקסט האתר
+          · ~ מסגרת מקווקוות = פרשנות AI. ריחוף מעל ערך מציג את מקורו ואת עמוד המקור.
         </p>
       )}
 
