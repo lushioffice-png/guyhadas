@@ -57,7 +57,10 @@ const {
 
 const SERVICE_MERGE_THRESHOLD = 0.6; // tighter than Search Topics' 0.5 - service names are short, so a looser threshold would wrongly merge distinct services that just share one word (e.g. "עיצוב פנים" / "עיצוב גרפי")
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
-const ANTHROPIC_MAX_TOKENS = 4096; // raised from 2048 when each item started carrying structured facets (more output per item); kept as a named constant - it's also the worst-case output used for the pre-call cost estimate below, so the two must stay in sync
+// 12000: with a multi-page crawl (up to 15 pages) a full structured reply in
+// Hebrew ran past 4096 tokens and was cut off mid-JSON (2026-10-07). Hebrew
+// tokenizes heavily, so this needs real headroom.
+const ANTHROPIC_MAX_TOKENS = 12000; // kept as a named constant - it's also the worst-case output used for the pre-call cost estimate below, so the two must stay in sync
 // Verified against platform.claude.com/docs/en/about-claude/models/overview
 // at implementation time, not guessed - see the Milestone 3.1 deliverable
 // doc for the source. If Anthropic ships a newer model later, update this
@@ -153,7 +156,9 @@ Rules:
 - Keep one item per offering as the website presents it; put its separate dimensions in facets rather than splitting it into several items.
 - "url" must be one of the page URLs listed above, and must be the page the quote or value actually appears on.
 - Evidence must keep its originating page. When several pages support an item, give quotes from each of them (one evidence entry per page), and prefer the most specific page (e.g. a service or client-type page) over a general summary on the homepage.
-- Return between 2 and 15 items in total (already-known items included).`;
+- Return between 2 and 12 items in total (already-known items included).
+- At most 3 evidence quotes per item, each a short phrase (under 15 words).
+- Output compact JSON on as few lines as possible - no indentation, no extra whitespace.`;
 }
 
 // Returns { proposals, usage } rather than just the parsed array - usage
@@ -181,14 +186,25 @@ async function proposeServicesWithAi(prompt) {
     throw new Error(`Anthropic API error: ${json?.error?.message || res.statusText}`);
   }
   const text = (json.content || []).map((block) => block.text || "").join("");
+  // A reply that hit the output limit is cut off mid-JSON. Say that plainly
+  // instead of surfacing it as a confusing parse error.
+  if (json.stop_reason === "max_tokens") {
+    throw new Error(
+      `AI reply was cut off at the ${ANTHROPIC_MAX_TOKENS}-token output limit before it finished (${json.usage?.output_tokens ?? "?"} tokens written) - the result was not used`
+    );
+  }
   const cleaned = text
     .trim()
     .replace(/^```json\s*/i, "")
     .replace(/^```\s*/i, "")
     .replace(/```\s*$/i, "");
+  // Tolerate a stray sentence before/after the array.
+  const start = cleaned.indexOf("[");
+  const end = cleaned.lastIndexOf("]");
+  const candidate = start >= 0 && end > start ? cleaned.slice(start, end + 1) : cleaned;
   let parsed;
   try {
-    parsed = JSON.parse(cleaned);
+    parsed = JSON.parse(candidate);
   } catch (err) {
     throw new Error(`Could not parse AI response as JSON: ${text.slice(0, 200)}`);
   }
