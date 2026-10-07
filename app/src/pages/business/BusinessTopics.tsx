@@ -146,6 +146,17 @@ function AnalyzeResultSummary({ result }: { result: AnalyzeBusinessResult }) {
   );
 }
 
+// Distinct from "AI not configured" (aiAvailable: false) - this is
+// aiAvailable: true but the step still didn't produce anything: a bad/
+// placeholder key, a network error, a response that didn't parse as JSON,
+// or a website that couldn't be read. Surfacing this distinction is the
+// whole point of the aiError field - "AI never ran" and "AI ran and
+// failed" used to look identical from this screen.
+function AnalyzeAiError({ result }: { result: AnalyzeBusinessResult }) {
+  if (!result.aiAvailable || !result.aiError) return null;
+  return <div className="login-error">ניתוח ה-AI נכשל: {result.aiError}</div>;
+}
+
 export default function BusinessTopics() {
   const { business } = useOutletContext<BusinessContext>();
   const [knowledge, setKnowledge] = useState<BusinessKnowledge[] | null>(null);
@@ -303,6 +314,7 @@ export default function BusinessTopics() {
         </button>
         {analyzeResult && <AnalyzeResultSummary result={analyzeResult} />}
       </div>
+      {analyzeResult && <AnalyzeAiError result={analyzeResult} />}
       {analyzeResult && !analyzeResult.aiAvailable && (
         <p className="text-dim" style={{ fontSize: "0.78rem", marginBottom: 12 }}>
           ניתוח AI (הצעת שירותים נוספים מתוך האתר) ממתין להגדרת מפתח Anthropic API - שירותים שהוגדרו בהקמת העסק עדיין

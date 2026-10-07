@@ -118,6 +118,7 @@ export interface AnalyzeBusinessResult {
   aiServicesMerged: number;
   pagesScanned: number;
   aiAvailable: boolean;
+  aiError: string | null;
 }
 
 export function analyzeBusiness(businessId: string): Promise<AnalyzeBusinessResult> {

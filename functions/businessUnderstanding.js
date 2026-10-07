@@ -224,12 +224,25 @@ exports.visibilityAnalyzeBusiness = functions
       }
 
       // Step 3: AI-assisted inference, only if configured and there's
-      // something to read. Degrades gracefully - if this throws, the
-      // owner-seeded services from step 1 have already succeeded.
+      // something to read. Degrades gracefully as far as step 1's results
+      // go - if this throws, the owner-seeded services have already
+      // succeeded and are not rolled back. But the failure itself is
+      // reported back as `aiError`, not swallowed: `aiAvailable: true` with
+      // `aiServicesProposed: 0` and no error previously looked identical
+      // whether the AI step never ran, ran and genuinely found nothing, or
+      // ran and failed (e.g. an invalid/placeholder API key, a network
+      // error, a response that didn't parse as JSON) - there was no way to
+      // tell those apart from the response, which matters a lot the first
+      // time this runs with a freshly-set key.
       let aiServicesProposed = 0;
       let aiServicesMerged = 0;
+      let aiError = null;
       const aiAvailable = isAiConfigured();
-      if (aiAvailable && pagesEvidence.length > 0) {
+      if (aiAvailable && pagesEvidence.length === 0) {
+        aiError = business.website
+          ? "Could not read any pages from the business's website - check it's reachable and not blocking automated requests"
+          : "This business has no website set in its profile, so there is nothing to analyze";
+      } else if (aiAvailable && pagesEvidence.length > 0) {
         try {
           const confirmedNames = known.filter((s) => s.ownerStatus === "confirmed").map((s) => s.name);
           const prompt = buildServiceInferencePrompt(business, confirmedNames, pagesEvidence);
@@ -274,6 +287,7 @@ exports.visibilityAnalyzeBusiness = functions
           }
         } catch (aiErr) {
           console.error("visibilityAnalyzeBusiness AI step failed:", aiErr.message);
+          aiError = aiErr.message;
         }
       }
 
@@ -283,7 +297,8 @@ exports.visibilityAnalyzeBusiness = functions
         aiServicesProposed,
         aiServicesMerged,
         pagesScanned: pagesEvidence.length,
-        aiAvailable
+        aiAvailable,
+        aiError
       });
     } catch (err) {
       console.error("visibilityAnalyzeBusiness error:", err.message);
