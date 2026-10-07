@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useReducer, useState, type FormEvent } from "react";
 import { useOutletContext } from "react-router-dom";
 import { EmptyState } from "../../components/EmptyState";
 import {
@@ -12,7 +12,9 @@ import {
   addManualCompetitor,
   deleteCompetitor
 } from "../../lib/firestore";
-import { discoverFromSearchConsole, discoverFromSemrush } from "../../lib/functions";
+import { discoverFromSearchConsole, discoverFromSemrush, discoverFromSemrushNewPaidRun } from "../../lib/functions";
+import { ConfirmPaidRunDialog } from "../../components/review/ConfirmPaidRunDialog";
+import { initialPaidRunState, paidRunReducer, runIsForced } from "../../lib/paidRunFlow";
 import type { DiscoveryResult } from "../../lib/functions";
 import { KNOWLEDGE_TYPE_LABELS, DISCOVERY_SOURCE_LABELS } from "../../types";
 import type { BusinessKnowledge, SearchTopic, TopicStatus, KnowledgeType, Competitor, BusinessService } from "../../types";
@@ -69,7 +71,8 @@ export default function BusinessTopics() {
   const [discoveryError, setDiscoveryError] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<{ source: string; result: DiscoveryResult } | null>(null);
   const [semrushSeed, setSemrushSeed] = useState("");
-  const [forceRefreshSemrush, setForceRefreshSemrush] = useState(false);
+  // Paid "new Semrush pull" only via the confirmation dialog (lib/paidRunFlow.ts).
+  const [semrushFlow, dispatchSemrush] = useReducer(paidRunReducer, initialPaidRunState);
 
   const [newTopicTitle, setNewTopicTitle] = useState("");
   const [newTopicNotes, setNewTopicNotes] = useState("");
@@ -95,7 +98,7 @@ export default function BusinessTopics() {
 
   if (!business) return <div className="loading-row">טוען…</div>;
 
-  async function runDiscovery(source: "gsc" | "semrush") {
+  async function runDiscovery(source: "gsc" | "semrush", paidNewRun = false) {
     if (!business) return;
     setRunningSource(source);
     setDiscoveryError(null);
@@ -108,13 +111,16 @@ export default function BusinessTopics() {
           setRunningSource(null);
           return;
         }
-        result = await discoverFromSemrush(business.id, semrushSeed.trim(), undefined, forceRefreshSemrush);
+        result = paidNewRun
+          ? await discoverFromSemrushNewPaidRun(business.id, semrushSeed.trim())
+          : await discoverFromSemrush(business.id, semrushSeed.trim());
       }
       setLastResult({ source, result });
     } catch (err) {
       setDiscoveryError(err instanceof Error ? err.message : "שגיאה בגילוי");
     } finally {
       setRunningSource(null);
+      if (source === "semrush") dispatchSemrush({ type: "finished" });
     }
   }
 
@@ -204,16 +210,39 @@ export default function BusinessTopics() {
                 <option key={s.id} value={s.name} />
               ))}
             </datalist>
-            <button type="button" className="btn btn-outline" disabled={runningSource !== null} onClick={() => runDiscovery("semrush")}>
+            <button
+              type="button"
+              className="btn btn-outline"
+              disabled={runningSource !== null}
+              onClick={() => {
+                dispatchSemrush({ type: "start" });
+                void runDiscovery("semrush");
+              }}
+            >
               {runningSource === "semrush" ? "מריץ…" : "גילוי מ-Semrush"}
             </button>
-            <label className="check-label">
-              <input type="checkbox" checked={forceRefreshSemrush} onChange={(e) => setForceRefreshSemrush(e.target.checked)} />
-              התעלם מתוצאה שמורה
-            </label>
+            {lastResult?.source === "semrush" && lastResult.result.cacheHit && (
+              <button type="button" className="btn btn-quiet btn-sm" disabled={runningSource !== null} onClick={() => dispatchSemrush({ type: "requestNewRun" })}>
+                שליפה חדשה (בתשלום)…
+              </button>
+            )}
           </div>
+          {semrushFlow.phase === "confirming" && (
+            <ConfirmPaidRunDialog
+              providerLabel="Semrush"
+              estimateNote="עלות משוערת: עד כ-2,100 יחידות API של Semrush."
+              onReuse={() => dispatchSemrush({ type: "cancel" })}
+              onConfirmPaid={() => {
+                const next = paidRunReducer(semrushFlow, { type: "confirmNewRun" });
+                dispatchSemrush({ type: "confirmNewRun" });
+                void runDiscovery("semrush", runIsForced(next));
+              }}
+              onClose={() => dispatchSemrush({ type: "cancel" })}
+            />
+          )}
           <p className="panel-meta" style={{ margin: "var(--space-3) 0 0" }}>
-            Search Console משקף נראות קיימת בגוגל. ל-Semrush מומלץ להזין שירות מאושר ממפת השירותים. Semrush יחזיר שגיאה
+            Search Console חינמי ומשקף נראות קיימת בגוגל. Semrush בתשלום ביחידות API — שליפה זהה תוך 24 שעות חוזרת מהמטמון
+            ללא עלות. ל-Semrush מומלץ להזין שירות מאושר ממפת השירותים. Semrush יחזיר שגיאה
             ברורה עד שיוגדר מפתח API עם יחידות.
           </p>
           {discoveryError && <div className="login-error" style={{ marginTop: "var(--space-3)", marginBottom: 0 }}>{discoveryError}</div>}

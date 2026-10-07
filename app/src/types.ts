@@ -393,6 +393,33 @@ export interface CrawlReport {
   skippedCount: number;
 }
 
+// What the cost-control layer decided for one analysis run
+// (functions/apiUsage.js runGoverned), recorded on every run.
+export type CacheDecision =
+  | "cache_hit"
+  | "cache_miss"
+  | "forced_refresh"
+  | "blocked_cache_unavailable"
+  | "blocked_safety_check_unavailable"
+  | "blocked_by_budget"
+  | "blocked_by_quota"
+  | "blocked_by_safety_limit"
+  | "not_applicable";
+
+export interface CostControlDecision {
+  provider: string;
+  analysisType: string;
+  promptVersion: number;
+  model: string | null;
+  inputHash: string | null;
+  cacheDecision: CacheDecision | null;
+  cacheHit: boolean;
+  forceRefresh: boolean;
+  providerCalled: boolean;
+  costUsd: number | null;
+  cachedFromUsageId: string | null;
+}
+
 // One record per visibilityAnalyzeBusiness run (businessAnalysisRuns).
 export interface BusinessAnalysisRun {
   id: string;
@@ -410,4 +437,6 @@ export interface BusinessAnalysisRun {
   aiBlockedReason: string | null;
   aiCacheHit: boolean;
   aiCostUsd: number | null;
+  costControl?: CostControlDecision; // absent on runs recorded before 2026-10-07 fix
+  status?: "completed" | "blocked" | "ai_error";
 }

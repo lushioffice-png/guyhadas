@@ -310,7 +310,8 @@ exports.visibilityDiscoverFromSemrush = functions
         operation: "discoverFromSemrush",
         businessId,
         input: { seed: normalizedSeed, database: db_, domain },
-        forceRefresh: !!forceRefresh,
+        model: null, // Semrush has no model; reports are fixed (see functions/semrush.js)
+        forceRefresh: forceRefresh === true,
         execute: async () => {
           const [related, ownKeywords, competitors] = await Promise.all([
             semrush.fetchRelatedKeywords(seedPhrase, db_, 30),
@@ -328,7 +329,16 @@ exports.visibilityDiscoverFromSemrush = functions
       });
 
       if (!governed.ok) {
-        res.status(429).json({ success: false, error: governed.blocked.message, blockedReason: governed.blocked.reason });
+        // 503 when a safety check couldn't run (fail closed - infrastructure),
+        // 429 when a budget/quota/circuit limit said no.
+        const infra = /_unavailable$/.test(governed.blocked.reason);
+        res.status(infra ? 503 : 429).json({
+          success: false,
+          error: governed.blocked.message,
+          blockedReason: governed.blocked.reason,
+          cacheDecision: governed.decision,
+          providerCalled: false
+        });
         return;
       }
 
@@ -342,7 +352,7 @@ exports.visibilityDiscoverFromSemrush = functions
       const result = await storeDiscoveredCandidates(businessId, candidates, "semrush", db_);
       const competitorsStored = await upsertCompetitors(businessId, competitors);
 
-      res.status(200).json({ success: true, ...result, competitorsFound: competitorsStored, cacheHit: governed.cacheHit });
+      res.status(200).json({ success: true, ...result, competitorsFound: competitorsStored, cacheHit: governed.cacheHit, cacheDecision: governed.decision, providerCalled: governed.providerCalled });
     } catch (err) {
       console.error("visibilityDiscoverFromSemrush error:", err.message);
       res.status(500).json({ success: false, error: err.message });

@@ -396,6 +396,21 @@ exports.visibilityAnalyzeBusiness = functions
       let aiCacheHit = false;
       let aiCostUsd = null;
       const aiAvailable = isAiConfigured();
+      // The cost-control decision for this run - recorded on every run
+      // record (businessAnalysisRuns) and returned to the UI.
+      const costControl = {
+        provider: "anthropic",
+        analysisType: "service_map",
+        promptVersion: SERVICE_PROMPT_VERSION,
+        model: ANTHROPIC_MODEL,
+        inputHash: null,
+        cacheDecision: aiAvailable ? null : "not_applicable",
+        cacheHit: false,
+        forceRefresh: !!forceRefresh,
+        providerCalled: false,
+        costUsd: 0,
+        cachedFromUsageId: null
+      };
       if (aiAvailable && pagesEvidence.length === 0) {
         aiError = business.website
           ? "Could not read any pages from the business's website - check it's reachable and not blocking automated requests"
@@ -429,8 +444,12 @@ exports.visibilityAnalyzeBusiness = functions
             provider: "anthropic",
             operation: "analyzeBusinessServices",
             businessId,
+            // Input shape unchanged since prompt v3 so existing ledger results
+            // keep their hash; the model is part of the cache identity via
+            // `model` below rather than the hash.
             input: { promptVersion: SERVICE_PROMPT_VERSION, ownerNames, pagesEvidence },
-            forceRefresh: !!forceRefresh,
+            model: ANTHROPIC_MODEL,
+            forceRefresh: forceRefresh === true,
             estimateCost: (input) =>
               estimatePreCallCostUsd(buildServiceInferencePrompt(business, knownNames, rejectedNames, input.pagesEvidence)),
             execute: async (input) => {
@@ -442,6 +461,12 @@ exports.visibilityAnalyzeBusiness = functions
           });
 
           aiCacheHit = governed.cacheHit;
+          costControl.inputHash = governed.inputHash;
+          costControl.cacheDecision = governed.decision;
+          costControl.cacheHit = governed.cacheHit;
+          costControl.providerCalled = governed.providerCalled;
+          costControl.cachedFromUsageId = governed.cachedFromUsageId || null;
+          if (governed.providerCalled && governed.usage) costControl.costUsd = governed.usage.actualCostUsd ?? null;
 
           if (!governed.ok) {
             aiBlockedReason = governed.blocked.reason;
@@ -524,6 +549,12 @@ exports.visibilityAnalyzeBusiness = functions
         } catch (aiErr) {
           console.error("visibilityAnalyzeBusiness AI step failed:", aiErr.message);
           aiError = aiErr.message;
+          if (aiErr.inputHash) costControl.inputHash = aiErr.inputHash;
+          if (aiErr.decision) costControl.cacheDecision = aiErr.decision;
+          if (aiErr.providerCalled) {
+            costControl.providerCalled = true;
+            costControl.costUsd = null; // the provider was called; its cost isn't known when the reply failed
+          }
         }
       }
 
@@ -539,8 +570,15 @@ exports.visibilityAnalyzeBusiness = functions
         aiError,
         aiBlockedReason,
         aiCacheHit,
-        aiCostUsd
+        aiCostUsd,
+        costControl,
+        // completed | blocked (a cost/safety control stopped the AI step) |
+        // ai_error (the AI step ran or tried to and failed)
+        status: aiBlockedReason ? "blocked" : aiError ? "ai_error" : "completed"
       };
+      console.log(
+        `visibilityAnalyzeBusiness cost-control ${businessId}: decision=${costControl.cacheDecision} cacheHit=${costControl.cacheHit} providerCalled=${costControl.providerCalled} costUsd=${costControl.costUsd} model=${costControl.model} promptVersion=${costControl.promptVersion} force=${costControl.forceRefresh} inputHash=${costControl.inputHash}`
+      );
       let analysisRunId = null;
       try {
         const runRef = await db.collection("businessAnalysisRuns").add({
@@ -568,7 +606,9 @@ exports.visibilityAnalyzeBusiness = functions
         aiError,
         aiBlockedReason,
         aiCacheHit,
-        aiCostUsd
+        aiCostUsd,
+        costControl,
+        status: runSummary.status
       });
     } catch (err) {
       console.error("visibilityAnalyzeBusiness error:", err.message);

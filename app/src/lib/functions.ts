@@ -1,5 +1,5 @@
 import { auth } from "../firebase";
-import type { Ga4SnapshotData, SearchConsoleSnapshotData, CrawlReport } from "../types";
+import type { Ga4SnapshotData, SearchConsoleSnapshotData, CrawlReport, CostControlDecision } from "../types";
 
 // Thin wrapper around the Visibility OS Cloud Functions (functions/visibility.js,
 // Milestone 2+). Same deployment shape as the existing public-site functions
@@ -94,6 +94,8 @@ export interface DiscoveryResult {
   refreshed: number;
   competitorsFound?: number;
   pagesScanned?: number;
+  cacheDecision?: string;
+  providerCalled?: boolean;
   // Semrush discovery only - set when a previous call with the identical
   // seed/database/domain, made within the cache's TTL, was reused instead
   // of spending another Semrush API call (Universal External API
@@ -105,13 +107,15 @@ export function discoverFromSearchConsole(businessId: string): Promise<Discovery
   return callFunction<DiscoveryResult>("visibilityDiscoverFromSearchConsole", { businessId });
 }
 
-export function discoverFromSemrush(
-  businessId: string,
-  seedPhrase: string,
-  database?: string,
-  forceRefresh?: boolean
-): Promise<DiscoveryResult> {
-  return callFunction<DiscoveryResult>("visibilityDiscoverFromSemrush", { businessId, seedPhrase, database, forceRefresh });
+// Normal discovery: reuses a cached Semrush result when one exists ($0).
+export function discoverFromSemrush(businessId: string, seedPhrase: string, database?: string): Promise<DiscoveryResult> {
+  return callFunction<DiscoveryResult>("visibilityDiscoverFromSemrush", { businessId, seedPhrase, database });
+}
+
+// PAID: bypasses the cache. Only call after the owner explicitly confirmed
+// a new paid run (components/review/ConfirmPaidRunDialog).
+export function discoverFromSemrushNewPaidRun(businessId: string, seedPhrase: string, database?: string): Promise<DiscoveryResult> {
+  return callFunction<DiscoveryResult>("visibilityDiscoverFromSemrush", { businessId, seedPhrase, database, forceRefresh: true });
 }
 
 // --- Business & Service Discovery (functions/businessUnderstanding.js) ---
@@ -144,12 +148,22 @@ export interface AnalyzeBusinessResult {
   aiCostUsd: number | null;
   // null when the business has no website set.
   crawl: CrawlReport | null;
+  costControl: CostControlDecision;
+  status: "completed" | "blocked" | "ai_error";
   analysisRunId: string | null;
 }
 
 // CrawlReport lives in types.ts (shared with businessAnalysisRuns records).
-export type { CrawlReport };
+export type { CrawlReport, CostControlDecision };
 
-export function analyzeBusiness(businessId: string, forceRefresh?: boolean): Promise<AnalyzeBusinessResult> {
-  return callFunction<AnalyzeBusinessResult>("visibilityAnalyzeBusiness", { businessId, forceRefresh });
+// Normal analysis: reuses the cached AI result when the input is unchanged
+// ($0). Never bypasses the cache.
+export function analyzeBusiness(businessId: string): Promise<AnalyzeBusinessResult> {
+  return callFunction<AnalyzeBusinessResult>("visibilityAnalyzeBusiness", { businessId });
+}
+
+// PAID: bypasses the cache and calls Claude. Only call after the owner
+// explicitly confirmed a new paid run (components/review/ConfirmPaidRunDialog).
+export function analyzeBusinessNewPaidRun(businessId: string): Promise<AnalyzeBusinessResult> {
+  return callFunction<AnalyzeBusinessResult>("visibilityAnalyzeBusiness", { businessId, forceRefresh: true });
 }

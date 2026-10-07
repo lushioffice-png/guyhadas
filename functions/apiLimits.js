@@ -20,6 +20,12 @@ module.exports = {
       // post-call cost computed from Anthropic's own reported
       // input_tokens/output_tokens - that second number is what actually
       // gets recorded and budget-checked against.
+      // The only model this operation used before the model was recorded on
+      // each ledger row (2026-10-07). Ledger rows with no `model` field are
+      // treated as produced by it, so they stay reusable for this model and
+      // are never reused for a different one. Do not change this value when
+      // switching models - change ANTHROPIC_MODEL in businessUnderstanding.js.
+      legacyModel: "claude-sonnet-5-5",
       inputPricePerMTokUsd: 2,
       outputPricePerMTokUsd: 10,
       maxEstimatedCostPerCallUsd: 0.5,

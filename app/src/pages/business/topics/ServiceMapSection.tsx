@@ -1,16 +1,56 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { analyzeBusiness } from "../../../lib/functions";
+import { useEffect, useReducer, useState, type FormEvent } from "react";
+import { analyzeBusiness, analyzeBusinessNewPaidRun } from "../../../lib/functions";
 import type { AnalyzeBusinessResult } from "../../../lib/functions";
 import { createManualService, listenLatestAnalysisRun } from "../../../lib/firestore";
 import type { Business, BusinessAnalysisRun, BusinessService, CrawlReport, ServiceOwnerStatus, TaskPriority } from "../../../types";
 import { EmptyState } from "../../../components/EmptyState";
 import { ProvenanceBadge } from "../../../components/review/provenance";
 import { ServiceCard } from "./ServiceCard";
+import { ConfirmPaidRunDialog } from "../../../components/review/ConfirmPaidRunDialog";
+import { initialPaidRunState, paidRunReducer, runIsForced } from "../../../lib/paidRunFlow";
+import type { CostControlDecision } from "../../../types";
 
 type Filter = "all" | ServiceOwnerStatus;
 
 const STATUS_ORDER: Record<ServiceOwnerStatus, number> = { needs_review: 0, confirmed: 1, rejected: 2 };
 const PRIORITY_ORDER: Record<TaskPriority, number> = { high: 0, medium: 1, low: 2 };
+
+const AI_ESTIMATE_NOTE = "עלות משוערת לניתוח חדש: כ-$0.09–$0.15.";
+
+// One line saying what the cost-control layer did on a run.
+function CostDecisionLine({ cc }: { cc: CostControlDecision }) {
+  const hash = cc.inputHash ? cc.inputHash.slice(0, 10) + "…" : "—";
+  let text: string;
+  switch (cc.cacheDecision) {
+    case "cache_hit":
+      text = "נעשה שימוש בתוצאה קיימת — Claude לא נקרא · עלות $0";
+      break;
+    case "cache_miss":
+      text = `לא נמצאה תוצאה לאותו קלט — Claude נקרא${cc.costUsd != null ? ` · עלות $${cc.costUsd.toFixed(4)}` : ""}`;
+      break;
+    case "forced_refresh":
+      text = `ניתוח חדש לבקשתך — Claude נקרא${cc.costUsd != null ? ` · עלות $${cc.costUsd.toFixed(4)}` : ""}`;
+      break;
+    case "blocked_cache_unavailable":
+    case "blocked_safety_check_unavailable":
+      text = "בקרת העלויות לא הצליחה לרוץ — Claude לא נקרא · עלות $0";
+      break;
+    case "blocked_by_budget":
+    case "blocked_by_quota":
+    case "blocked_by_safety_limit":
+      text = "נחסם ע״י מגבלת עלות/מכסה — Claude לא נקרא · עלות $0";
+      break;
+    default:
+      text = cc.providerCalled ? "Claude נקרא" : "לא בוצעה פנייה ל-AI";
+  }
+  return (
+    <div className="panel-meta" style={{ marginTop: "var(--space-2)" }}>
+      {text}
+      <span className="text-dim"> · מודל {cc.model ?? "—"} · גרסת הנחיה {cc.promptVersion} · מזהה קלט </span>
+      <span className="url-text" title={cc.inputHash ?? undefined}>{hash}</span>
+    </div>
+  );
+}
 
 const BLOCKED_LABELS: Record<string, string> = {
   blocked_by_budget: "חסימת תקציב",
@@ -106,6 +146,7 @@ function WebsiteAnalysisPanel({ run, business }: { run: BusinessAnalysisRun | nu
         <div className="panel-title">ניתוח האתר</div>
         <div className="panel-meta">{when ? `ניתוח אחרון: ${when}` : "ניתוח אחרון"}</div>
       </div>
+      {run.costControl && <CostDecisionLine cc={run.costControl} />}
       {run.crawl ? <CrawlDetails crawl={run.crawl} /> : <div className="panel-meta">לא נשמרו נתוני סריקה לריצה הזו.</div>}
     </div>
   );
@@ -113,8 +154,21 @@ function WebsiteAnalysisPanel({ run, business }: { run: BusinessAnalysisRun | nu
 
 // Result of the run just made in this session - only backend-reported values.
 function AnalysisResult({ result }: { result: AnalyzeBusinessResult }) {
+  const infra = !!result.aiBlockedReason && /_unavailable$/.test(result.aiBlockedReason);
   const failed = result.aiAvailable && result.aiError && !result.aiBlockedReason;
-  const blocked = result.aiAvailable && result.aiBlockedReason;
+  const blocked = result.aiAvailable && result.aiBlockedReason && !infra;
+  if (infra) {
+    return (
+      <div className="panel tone-danger" role="alert">
+        <div className="panel-title">שגיאת תשתית — הניתוח נעצר</div>
+        <div className="panel-meta" style={{ marginTop: 6 }}>
+          בקרת העלויות לא הצליחה לבדוק אם קיימת תוצאה שמורה, ולכן המערכת עצרה <strong>ולא פנתה ל-Claude</strong>. לא
+          בוצע חיוב.
+        </div>
+        <div className="panel-meta" style={{ marginTop: 6, color: "var(--color-danger)" }}>{result.aiError}</div>
+      </div>
+    );
+  }
   return (
     <div className={`panel ${failed ? "tone-danger" : blocked ? "tone-warn" : "tone-accent"}`}>
       <div className="panel-title">{failed ? "הניתוח הושלם חלקית" : "הניתוח הושלם"}</div>
@@ -124,11 +178,10 @@ function AnalysisResult({ result }: { result: AnalyzeBusinessResult }) {
         {result.aiAvailable && <span><strong>{result.aiServicesMerged}</strong>פריטים קיימים עודכנו</span>}
         <span><strong>{result.ownerServicesSeeded}</strong>נוספו מהקמת העסק</span>
       </div>
-      <div className="panel-meta" style={{ marginTop: "var(--space-2)" }}>
-        {!result.aiAvailable && "ניתוח AI אינו מוגדר - נקלטו רק שירותים שהוזנו בהקמת העסק."}
-        {result.aiAvailable && result.aiCacheHit && "התוכן לא השתנה מאז הניתוח הקודם - נעשה שימוש בתוצאה השמורה, ללא פנייה חדשה ל-AI ובלי עלות."}
-        {result.aiAvailable && !result.aiCacheHit && result.aiCostUsd != null && `עלות פניית ה-AI: $${result.aiCostUsd.toFixed(4)}`}
-      </div>
+      {!result.aiAvailable && (
+        <div className="panel-meta" style={{ marginTop: "var(--space-2)" }}>ניתוח AI אינו מוגדר - נקלטו רק שירותים שהוזנו בהקמת העסק.</div>
+      )}
+      {result.aiAvailable && result.costControl && <CostDecisionLine cc={result.costControl} />}
       {blocked && (
         <div className="panel-meta" style={{ marginTop: "var(--space-2)", color: "var(--color-warn)" }}>
           ניתוח ה-AI נחסם ע״י בקרת העלויות ({BLOCKED_LABELS[result.aiBlockedReason!] || result.aiBlockedReason}): {result.aiError}
@@ -148,9 +201,9 @@ export function ServiceMapSection({ business, services }: { business: Business; 
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const [analyzeResult, setAnalyzeResult] = useState<AnalyzeBusinessResult | null>(null);
-  // Cost-control rule: a cached result is reused by default; this is the
-  // explicit "ignore the cache" option (budget/quota limits still apply).
-  const [forceRefresh, setForceRefresh] = useState(false);
+  // Paid "new run" is only ever started from the confirmation dialog, for
+  // one run, and cleared as it starts (lib/paidRunFlow.ts).
+  const [flow, dispatch] = useReducer(paidRunReducer, initialPaidRunState);
   const [latestRun, setLatestRun] = useState<BusinessAnalysisRun | null | undefined>(undefined);
 
   const [newName, setNewName] = useState("");
@@ -159,18 +212,41 @@ export function ServiceMapSection({ business, services }: { business: Business; 
 
   useEffect(() => listenLatestAnalysisRun(business.id, setLatestRun), [business.id]);
 
-  async function handleAnalyze() {
+  async function runAnalysis(paidNewRun: boolean) {
     setAnalyzing(true);
     setAnalyzeError(null);
     setAnalyzeResult(null);
     try {
-      setAnalyzeResult(await analyzeBusiness(business.id, forceRefresh));
+      setAnalyzeResult(paidNewRun ? await analyzeBusinessNewPaidRun(business.id) : await analyzeBusiness(business.id));
     } catch (err) {
       setAnalyzeError(err instanceof Error ? err.message : "שגיאה בניתוח העסק");
     } finally {
       setAnalyzing(false);
+      dispatch({ type: "finished" });
     }
   }
+
+  function handleAnalyze() {
+    dispatch({ type: "start" });
+    void runAnalysis(false);
+  }
+
+  function handleConfirmPaidRun() {
+    const next = paidRunReducer(flow, { type: "confirmNewRun" });
+    dispatch({ type: "confirmNewRun" });
+    void runAnalysis(runIsForced(next));
+  }
+
+  // A previous AI result exists for this business (from this session or a
+  // recorded run) - only then does "run a new paid analysis" make sense.
+  const hasPreviousResult =
+    !!analyzeResult?.costControl?.inputHash || !!latestRun?.costControl?.inputHash || (latestRun?.aiAvailable && !latestRun?.aiError);
+  const lastPaidCost =
+    analyzeResult?.costControl?.providerCalled && analyzeResult.costControl.costUsd != null
+      ? analyzeResult.costControl.costUsd
+      : latestRun?.costControl?.providerCalled
+        ? latestRun.costControl.costUsd
+        : null;
 
   async function handleAdd(e: FormEvent) {
     e.preventDefault();
@@ -214,16 +290,36 @@ export function ServiceMapSection({ business, services }: { business: Business; 
           <h3 className="subsection-title">מפת שירותים</h3>
           <div className="subsection-sub">מה העסק מוכר - כפי שהמערכת הבינה מהקמת העסק ומתוכן האתר. אשר/י את מה שנכון לפני שממשיכים לגילוי חיפוש.</div>
         </div>
-        <div className="panel-row">
-          <label className="check-label">
-            <input type="checkbox" checked={forceRefresh} onChange={(e) => setForceRefresh(e.target.checked)} />
-            התעלם מתוצאה שמורה
-          </label>
-          <button type="button" className="btn btn-primary" disabled={analyzing} onClick={handleAnalyze}>
-            {analyzing ? "מנתח…" : "נתח את העסק והאתר"}
-          </button>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+          <div className="panel-row">
+            {hasPreviousResult && (
+              <button type="button" className="btn btn-quiet btn-sm" disabled={analyzing} onClick={() => dispatch({ type: "requestNewRun" })}>
+                הרצת ניתוח חדש (בתשלום)…
+              </button>
+            )}
+            <button type="button" className="btn btn-primary" disabled={analyzing} onClick={handleAnalyze}>
+              {analyzing ? "מנתח…" : "נתח את העסק והאתר"}
+            </button>
+          </div>
+          <span className="text-dim" style={{ fontSize: "0.78rem" }}>
+            ללא עלות כשתוכן האתר לא השתנה · פנייה בתשלום ל-Claude רק כשהתוכן השתנה
+          </span>
         </div>
       </div>
+
+      {flow.phase === "confirming" && (
+        <ConfirmPaidRunDialog
+          providerLabel="Claude"
+          lastCostUsd={lastPaidCost}
+          estimateNote={AI_ESTIMATE_NOTE}
+          onReuse={() => {
+            dispatch({ type: "cancel" });
+            handleAnalyze();
+          }}
+          onConfirmPaid={handleConfirmPaidRun}
+          onClose={() => dispatch({ type: "cancel" })}
+        />
+      )}
 
       {analyzing && (
         <div className="panel">
