@@ -24,7 +24,10 @@ import type {
   SearchTopic,
   TopicStatus,
   Keyword,
-  Competitor
+  Competitor,
+  BusinessService,
+  ServiceOwnerStatus,
+  TaskPriority
 } from "../types";
 
 // How much history the Traffic/Search trend charts load. Milestone 3's
@@ -179,7 +182,63 @@ export function listenSearchSnapshots(businessId: string, cb: (snapshots: Search
   });
 }
 
-// --- Search Universe & Qualification (roadmap Milestone 3) ---
+// --- Business & Service Discovery (roadmap Milestone 3.1) ---
+// Business Understanding -> Service Map -> (owner validation below) ->
+// Search Discovery seeds. visibilityAnalyzeBusiness (lib/functions.ts)
+// populates this collection server-side; everything here is the owner
+// reviewing/confirming/rejecting/editing what it proposed, or adding a
+// service by hand.
+
+export function listenBusinessServices(businessId: string, cb: (services: BusinessService[]) => void): Unsubscribe {
+  const q = query(collection(db, "businessServices"), where("businessId", "==", businessId));
+  return onSnapshot(q, (snap) => {
+    const services = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<BusinessService, "id">) }));
+    services.sort((a, b) => {
+      const ta = (a.createdAt as { toMillis?: () => number })?.toMillis?.() ?? 0;
+      const tb = (b.createdAt as { toMillis?: () => number })?.toMillis?.() ?? 0;
+      return tb - ta;
+    });
+    cb(services);
+  });
+}
+
+// The owner's three decisions on a proposed/existing service - a plain
+// status+notes-free update, same shape as updateSearchTopicStatus.
+export async function updateServiceStatus(id: string, ownerStatus: ServiceOwnerStatus) {
+  return updateDoc(doc(db, "businessServices", id), { ownerStatus, updatedAt: serverTimestamp() });
+}
+
+export async function updateServicePriority(id: string, priority: TaskPriority) {
+  return updateDoc(doc(db, "businessServices", id), { priority, updatedAt: serverTimestamp() });
+}
+
+export async function updateServiceDetails(id: string, data: { name?: string; description?: string; geographies?: string[] }) {
+  return updateDoc(doc(db, "businessServices", id), { ...data, updatedAt: serverTimestamp() });
+}
+
+// Manual service add (source: "owner", confirmed immediately) - the owner
+// typing it in IS the validation step, same precedent as createManualTopic.
+export async function createManualService(businessId: string, name: string, description?: string, geographies?: string[]) {
+  return addDoc(collection(db, "businessServices"), {
+    businessId,
+    name,
+    description: description || "",
+    source: "owner",
+    confidence: "observed",
+    ownerStatus: "confirmed",
+    priority: "medium",
+    geographies: geographies || [],
+    evidence: [],
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function deleteBusinessService(id: string) {
+  return deleteDoc(doc(db, "businessServices", id));
+}
+
+// --- Search Universe & Qualification (roadmap Milestone 3.2) ---
 // Discovery itself (populating searchTopics/keywords/competitors) runs
 // server-side - see lib/functions.ts's discoverFromSearchConsole/Website/
 // Semrush. Everything here is Owner Validation: the owner reading what was

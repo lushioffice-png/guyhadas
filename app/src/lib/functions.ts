@@ -100,10 +100,26 @@ export function discoverFromSearchConsole(businessId: string): Promise<Discovery
   return callFunction<DiscoveryResult>("visibilityDiscoverFromSearchConsole", { businessId });
 }
 
-export function discoverFromWebsite(businessId: string): Promise<DiscoveryResult> {
-  return callFunction<DiscoveryResult>("visibilityDiscoverFromWebsite", { businessId });
-}
-
 export function discoverFromSemrush(businessId: string, seedPhrase: string, database?: string): Promise<DiscoveryResult> {
   return callFunction<DiscoveryResult>("visibilityDiscoverFromSemrush", { businessId, seedPhrase, database });
+}
+
+// --- Business & Service Discovery (functions/businessUnderstanding.js) ---
+// Runs BEFORE search discovery in the corrected pipeline: seeds confirmed
+// services from onboarding's services[] field (no AI, no cost), then - only
+// if ANTHROPIC_API_KEY is configured - scrapes the business's website for
+// evidence and asks Claude to propose additional services, landing as
+// ownerStatus "needs_review" in businessServices (see lib/firestore.ts for
+// the owner-validation writes: confirm/reject/edit/manual add).
+
+export interface AnalyzeBusinessResult {
+  ownerServicesSeeded: number;
+  aiServicesProposed: number;
+  aiServicesMerged: number;
+  pagesScanned: number;
+  aiAvailable: boolean;
+}
+
+export function analyzeBusiness(businessId: string): Promise<AnalyzeBusinessResult> {
+  return callFunction<AnalyzeBusinessResult>("visibilityAnalyzeBusiness", { businessId });
 }
