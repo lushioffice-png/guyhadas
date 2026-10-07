@@ -36,6 +36,8 @@ const { setCors, requireAdmin, getVisibilityAuth } = require("./visibility");
 const { tokenize, jaccard } = require("./textSimilarity");
 const { extractDomain } = require("./webUtils");
 const semrush = require("./semrush");
+const { runGoverned } = require("./apiUsage");
+const apiLimits = require("./apiLimits");
 
 const JACCARD_MERGE_THRESHOLD = 0.5;
 const MIN_QUERY_LENGTH = 2;
@@ -274,12 +276,13 @@ exports.visibilityDiscoverFromSemrush = functions
       return;
     }
 
-    const { businessId, seedPhrase, database } = req.body || {};
+    const { businessId, seedPhrase, database, forceRefresh } = req.body || {};
     if (!businessId || !seedPhrase) {
       res.status(400).json({ success: false, error: "businessId and seedPhrase are required" });
       return;
     }
     const db_ = database || "il";
+    const normalizedSeed = seedPhrase.trim().toLowerCase();
 
     try {
       const db = admin.firestore();
@@ -290,12 +293,46 @@ exports.visibilityDiscoverFromSemrush = functions
       }
       const domain = extractDomain(bizDoc.data().website);
 
-      const [related, ownKeywords, competitors] = await Promise.all([
-        semrush.fetchRelatedKeywords(seedPhrase, db_, 30),
-        semrush.fetchDomainOrganicKeywords(domain, db_, 50),
-        semrush.fetchOrganicCompetitors(domain, db_, 10)
-      ]);
+      // Semrush costs real API units per call (see functions/apiLimits.js)
+      // - gated through the same Universal External API Cost-Control Rule
+      // governor as the Anthropic call in businessUnderstanding.js. Unlike
+      // that one, this cache has a TTL (search demand drifts day to day
+      // even for an unchanged seed/domain) rather than being valid forever
+      // - see functions/apiLimits.js's comment on why. The expensive part
+      // is the Semrush call itself; storeDiscoveredCandidates/
+      // upsertCompetitors below still run on a cache hit since they're free
+      // local Firestore writes and already idempotent (dedupe by existing
+      // keyword/domain), so a repeated identical request still reflects
+      // current normalization/exclusion rules without spending another
+      // Semrush call to get there.
+      const governed = await runGoverned({
+        provider: "semrush",
+        operation: "discoverFromSemrush",
+        businessId,
+        input: { seed: normalizedSeed, database: db_, domain },
+        forceRefresh: !!forceRefresh,
+        execute: async () => {
+          const [related, ownKeywords, competitors] = await Promise.all([
+            semrush.fetchRelatedKeywords(seedPhrase, db_, 30),
+            semrush.fetchDomainOrganicKeywords(domain, db_, 50),
+            semrush.fetchOrganicCompetitors(domain, db_, 10)
+          ]);
+          return {
+            result: { related, ownKeywords, competitors },
+            usage: {
+              recordsReturned: related.length + ownKeywords.length + competitors.length,
+              providerUnitsUsed: apiLimits.semrush.discoverFromSemrush.unitsPerCall
+            }
+          };
+        }
+      });
 
+      if (!governed.ok) {
+        res.status(429).json({ success: false, error: governed.blocked.message, blockedReason: governed.blocked.reason });
+        return;
+      }
+
+      const { related, ownKeywords, competitors } = governed.result;
       const candidates = [...related, ...ownKeywords].map((r) => ({
         query: r.query,
         volume: r.volume ?? null,
@@ -305,7 +342,7 @@ exports.visibilityDiscoverFromSemrush = functions
       const result = await storeDiscoveredCandidates(businessId, candidates, "semrush", db_);
       const competitorsStored = await upsertCompetitors(businessId, competitors);
 
-      res.status(200).json({ success: true, ...result, competitorsFound: competitorsStored });
+      res.status(200).json({ success: true, ...result, competitorsFound: competitorsStored, cacheHit: governed.cacheHit });
     } catch (err) {
       console.error("visibilityDiscoverFromSemrush error:", err.message);
       res.status(500).json({ success: false, error: err.message });

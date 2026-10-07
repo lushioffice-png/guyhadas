@@ -94,14 +94,24 @@ export interface DiscoveryResult {
   refreshed: number;
   competitorsFound?: number;
   pagesScanned?: number;
+  // Semrush discovery only - set when a previous call with the identical
+  // seed/database/domain, made within the cache's TTL, was reused instead
+  // of spending another Semrush API call (Universal External API
+  // Cost-Control Rule - see functions/apiUsage.js and the project doc).
+  cacheHit?: boolean;
 }
 
 export function discoverFromSearchConsole(businessId: string): Promise<DiscoveryResult> {
   return callFunction<DiscoveryResult>("visibilityDiscoverFromSearchConsole", { businessId });
 }
 
-export function discoverFromSemrush(businessId: string, seedPhrase: string, database?: string): Promise<DiscoveryResult> {
-  return callFunction<DiscoveryResult>("visibilityDiscoverFromSemrush", { businessId, seedPhrase, database });
+export function discoverFromSemrush(
+  businessId: string,
+  seedPhrase: string,
+  database?: string,
+  forceRefresh?: boolean
+): Promise<DiscoveryResult> {
+  return callFunction<DiscoveryResult>("visibilityDiscoverFromSemrush", { businessId, seedPhrase, database, forceRefresh });
 }
 
 // --- Business & Service Discovery (functions/businessUnderstanding.js) ---
@@ -118,8 +128,22 @@ export interface AnalyzeBusinessResult {
   aiServicesMerged: number;
   pagesScanned: number;
   aiAvailable: boolean;
+  aiError: string | null;
+  // Universal External API Cost-Control Rule fields (see
+  // functions/apiUsage.js and the project doc). aiBlockedReason is set
+  // instead of aiError when the call was never attempted because a
+  // budget/quota/circuit-breaker limit was already hit -
+  // "blocked_by_budget" | "blocked_by_quota" | "blocked_by_safety_limit".
+  // aiCacheHit means the website evidence + confirmed services were
+  // unchanged since the last successful analysis, so Claude was not
+  // called again - the services shown are the same ones from that run.
+  // aiCostUsd is the real, token-based cost of this specific call (null
+  // on a cache hit, a block, or when AI isn't configured).
+  aiBlockedReason: "blocked_by_budget" | "blocked_by_quota" | "blocked_by_safety_limit" | null;
+  aiCacheHit: boolean;
+  aiCostUsd: number | null;
 }
 
-export function analyzeBusiness(businessId: string): Promise<AnalyzeBusinessResult> {
-  return callFunction<AnalyzeBusinessResult>("visibilityAnalyzeBusiness", { businessId });
+export function analyzeBusiness(businessId: string, forceRefresh?: boolean): Promise<AnalyzeBusinessResult> {
+  return callFunction<AnalyzeBusinessResult>("visibilityAnalyzeBusiness", { businessId, forceRefresh });
 }

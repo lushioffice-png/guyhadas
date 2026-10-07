@@ -43,9 +43,12 @@ const cheerio = require("cheerio");
 const { setCors, requireAdmin } = require("./visibility");
 const { tokenize, jaccard } = require("./textSimilarity");
 const { extractDomain, fetchWithTimeout, discoverSitePages } = require("./webUtils");
+const { runGoverned } = require("./apiUsage");
+const apiLimits = require("./apiLimits");
 
 const SERVICE_MERGE_THRESHOLD = 0.6; // tighter than Search Topics' 0.5 - service names are short, so a looser threshold would wrongly merge distinct services that just share one word (e.g. "עיצוב פנים" / "עיצוב גרפי")
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
+const ANTHROPIC_MAX_TOKENS = 2048; // kept as a named constant - it's also the worst-case output used for the pre-call cost estimate below, so the two must stay in sync
 // Verified against platform.claude.com/docs/en/about-claude/models/overview
 // at implementation time, not guessed - see the Milestone 3.1 deliverable
 // doc for the source. If Anthropic ships a newer model later, update this
@@ -111,6 +114,12 @@ Respond with ONLY a JSON array (no prose, no markdown code fences), where each i
 Propose between 2 and 10 distinct, non-overlapping services. Do not invent a service with no support in the business context or website evidence above.`;
 }
 
+// Returns { proposals, usage } rather than just the parsed array - usage
+// (Anthropic's own reported input_tokens/output_tokens, plus the response
+// id) is what lets the governor record a real cost on the ledger instead
+// of just the rough pre-call estimate. See estimatePreCallCostUsd below
+// for the estimate, and computeActualCostUsd for what turns these real
+// token counts into a $ figure.
 async function proposeServicesWithAi(prompt) {
   const res = await fetch(ANTHROPIC_API_URL, {
     method: "POST",
@@ -121,7 +130,7 @@ async function proposeServicesWithAi(prompt) {
     },
     body: JSON.stringify({
       model: ANTHROPIC_MODEL,
-      max_tokens: 2048,
+      max_tokens: ANTHROPIC_MAX_TOKENS,
       messages: [{ role: "user", content: prompt }]
     })
   });
@@ -144,7 +153,35 @@ async function proposeServicesWithAi(prompt) {
   if (!Array.isArray(parsed)) {
     throw new Error("AI response was not a JSON array");
   }
-  return parsed;
+  const usage = {
+    inputTokens: json.usage && typeof json.usage.input_tokens === "number" ? json.usage.input_tokens : null,
+    outputTokens: json.usage && typeof json.usage.output_tokens === "number" ? json.usage.output_tokens : null,
+    requestId: json.id || null
+  };
+  return { proposals: parsed, usage };
+}
+
+// Pre-call budget gate, BEFORE anything is sent to Claude. Deliberately a
+// rough chars/4 heuristic (mixed Hebrew/English marketing text doesn't
+// tokenize as cleanly as English prose) with the output side capped at
+// ANTHROPIC_MAX_TOKENS (the real worst case, since that's the hard limit
+// passed to the API) - good enough to catch a runaway prompt before it's
+// sent, not a claim of exact cost. The ledger's actualCostUsd, computed
+// from Anthropic's own reported token counts after the call, is what
+// later budget checks actually rely on - see the cost-control rule's
+// "never pretend an exact cost is known when it is not."
+function estimatePreCallCostUsd(prompt) {
+  const limits = apiLimits.anthropic.analyzeBusinessServices;
+  const estimatedInputTokens = Math.ceil(prompt.length / 4);
+  return (
+    (estimatedInputTokens / 1e6) * limits.inputPricePerMTokUsd + (ANTHROPIC_MAX_TOKENS / 1e6) * limits.outputPricePerMTokUsd
+  );
+}
+
+function computeActualCostUsd(inputTokens, outputTokens) {
+  if (inputTokens == null || outputTokens == null) return null;
+  const limits = apiLimits.anthropic.analyzeBusinessServices;
+  return (inputTokens / 1e6) * limits.inputPricePerMTokUsd + (outputTokens / 1e6) * limits.outputPricePerMTokUsd;
 }
 
 exports.visibilityAnalyzeBusiness = functions
@@ -158,7 +195,7 @@ exports.visibilityAnalyzeBusiness = functions
     const user = await requireAdmin(req, res);
     if (!user) return;
 
-    const { businessId } = req.body || {};
+    const { businessId, forceRefresh } = req.body || {};
     if (!businessId) {
       res.status(400).json({ success: false, error: "businessId is required" });
       return;
@@ -224,56 +261,108 @@ exports.visibilityAnalyzeBusiness = functions
       }
 
       // Step 3: AI-assisted inference, only if configured and there's
-      // something to read. Degrades gracefully - if this throws, the
-      // owner-seeded services from step 1 have already succeeded.
+      // something to read. Degrades gracefully as far as step 1's results
+      // go - if this throws, the owner-seeded services have already
+      // succeeded and are not rolled back. The failure itself is reported
+      // back as `aiError`, not swallowed: `aiAvailable: true` with
+      // `aiServicesProposed: 0` and no error previously looked identical
+      // whether the AI step never ran, ran and genuinely found nothing, or
+      // ran and failed (e.g. an invalid/placeholder API key, a network
+      // error, a response that didn't parse as JSON).
+      //
+      // The actual Claude call now goes through runGoverned() (see
+      // functions/apiUsage.js and the Universal External API Cost-Control
+      // Rule in the project docs) - keyed on the confirmed-service names
+      // plus the scraped website evidence, so re-running this on an
+      // unchanged website/service list reuses the last result instead of
+      // paying for another Claude call. The merge-into-businessServices
+      // loop below always runs against the CURRENT state of
+      // businessServices, cache hit or not - caching only skips asking
+      // Claude again, never skips re-checking what the owner has since
+      // confirmed/rejected.
       let aiServicesProposed = 0;
       let aiServicesMerged = 0;
+      let aiError = null;
+      let aiBlockedReason = null;
+      let aiCacheHit = false;
+      let aiCostUsd = null;
       const aiAvailable = isAiConfigured();
-      if (aiAvailable && pagesEvidence.length > 0) {
+      if (aiAvailable && pagesEvidence.length === 0) {
+        aiError = business.website
+          ? "Could not read any pages from the business's website - check it's reachable and not blocking automated requests"
+          : "This business has no website set in its profile, so there is nothing to analyze";
+      } else if (aiAvailable && pagesEvidence.length > 0) {
         try {
-          const confirmedNames = known.filter((s) => s.ownerStatus === "confirmed").map((s) => s.name);
-          const prompt = buildServiceInferencePrompt(business, confirmedNames, pagesEvidence);
-          const proposals = await proposeServicesWithAi(prompt);
+          const confirmedNames = known
+            .filter((s) => s.ownerStatus === "confirmed")
+            .map((s) => s.name)
+            .sort();
 
-          for (const p of proposals) {
-            const name = (p && p.name ? p.name : "").trim();
-            if (!name) continue;
-            const tokens = tokenize(name);
-            const match = known.find((s) => jaccard(tokens, s.tokens) >= SERVICE_MERGE_THRESHOLD);
-            const evidence = Array.isArray(p.evidence) ? p.evidence.slice(0, 5) : [];
-            const geographies = Array.isArray(p.geographies) ? p.geographies : [];
-
-            if (match) {
-              // Merge into the existing service rather than creating a
-              // near-duplicate. If it was owner-entered, mark the richer
-              // provenance as "combined" (both the owner and the website
-              // evidence point to this service) rather than overwriting it.
-              const updateData = { updatedAt: now };
-              if (match.source === "owner") updateData.source = "combined";
-              if (evidence.length > 0) updateData.evidence = admin.firestore.FieldValue.arrayUnion(...evidence);
-              await db.collection("businessServices").doc(match.id).update(updateData);
-              aiServicesMerged++;
-              continue;
+          const governed = await runGoverned({
+            provider: "anthropic",
+            operation: "analyzeBusinessServices",
+            businessId,
+            input: { confirmedNames, pagesEvidence },
+            forceRefresh: !!forceRefresh,
+            estimateCost: (input) => estimatePreCallCostUsd(buildServiceInferencePrompt(business, input.confirmedNames, input.pagesEvidence)),
+            execute: async (input) => {
+              const prompt = buildServiceInferencePrompt(business, input.confirmedNames, input.pagesEvidence);
+              const { proposals, usage } = await proposeServicesWithAi(prompt);
+              const actualCostUsd = computeActualCostUsd(usage.inputTokens, usage.outputTokens);
+              return { result: proposals, usage: { ...usage, actualCostUsd } };
             }
+          });
 
-            const ref = await db.collection("businessServices").add({
-              businessId,
-              name,
-              description: typeof p.description === "string" ? p.description : "",
-              source: "ai_inference",
-              confidence: "inferred",
-              ownerStatus: "needs_review",
-              priority: "medium",
-              geographies,
-              evidence,
-              createdAt: now,
-              updatedAt: now
-            });
-            known.push({ id: ref.id, name, source: "ai_inference", ownerStatus: "needs_review", tokens });
-            aiServicesProposed++;
+          aiCacheHit = governed.cacheHit;
+
+          if (!governed.ok) {
+            aiBlockedReason = governed.blocked.reason;
+            aiError = governed.blocked.message;
+          } else {
+            if (!governed.cacheHit && governed.usage) aiCostUsd = governed.usage.actualCostUsd;
+            const proposals = Array.isArray(governed.result) ? governed.result : [];
+
+            for (const p of proposals) {
+              const name = (p && p.name ? p.name : "").trim();
+              if (!name) continue;
+              const tokens = tokenize(name);
+              const match = known.find((s) => jaccard(tokens, s.tokens) >= SERVICE_MERGE_THRESHOLD);
+              const evidence = Array.isArray(p.evidence) ? p.evidence.slice(0, 5) : [];
+              const geographies = Array.isArray(p.geographies) ? p.geographies : [];
+
+              if (match) {
+                // Merge into the existing service rather than creating a
+                // near-duplicate. If it was owner-entered, mark the richer
+                // provenance as "combined" (both the owner and the website
+                // evidence point to this service) rather than overwriting it.
+                const updateData = { updatedAt: now };
+                if (match.source === "owner") updateData.source = "combined";
+                if (evidence.length > 0) updateData.evidence = admin.firestore.FieldValue.arrayUnion(...evidence);
+                await db.collection("businessServices").doc(match.id).update(updateData);
+                aiServicesMerged++;
+                continue;
+              }
+
+              const ref = await db.collection("businessServices").add({
+                businessId,
+                name,
+                description: typeof p.description === "string" ? p.description : "",
+                source: "ai_inference",
+                confidence: "inferred",
+                ownerStatus: "needs_review",
+                priority: "medium",
+                geographies,
+                evidence,
+                createdAt: now,
+                updatedAt: now
+              });
+              known.push({ id: ref.id, name, source: "ai_inference", ownerStatus: "needs_review", tokens });
+              aiServicesProposed++;
+            }
           }
         } catch (aiErr) {
           console.error("visibilityAnalyzeBusiness AI step failed:", aiErr.message);
+          aiError = aiErr.message;
         }
       }
 
@@ -283,7 +372,11 @@ exports.visibilityAnalyzeBusiness = functions
         aiServicesProposed,
         aiServicesMerged,
         pagesScanned: pagesEvidence.length,
-        aiAvailable
+        aiAvailable,
+        aiError,
+        aiBlockedReason,
+        aiCacheHit,
+        aiCostUsd
       });
     } catch (err) {
       console.error("visibilityAnalyzeBusiness error:", err.message);

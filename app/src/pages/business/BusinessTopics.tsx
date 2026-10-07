@@ -92,6 +92,7 @@ function DiscoveryResultSummary({ result }: { result: DiscoveryResult }) {
       אוטומטית {result.excluded}
       {result.competitorsFound !== undefined ? ` · מתחרים שהתגלו ${result.competitorsFound}` : ""}
       {result.pagesScanned !== undefined ? ` · עמודים שנסרקו ${result.pagesScanned}` : ""}
+      {result.cacheHit ? " · נעשה שימוש בתוצאה שמורה (לא נשלחה פנייה חדשה ל-Semrush)" : ""}
     </span>
   );
 }
@@ -139,11 +140,49 @@ function AnalyzeResultSummary({ result }: { result: AnalyzeBusinessResult }) {
   return (
     <span className="text-dim" style={{ fontSize: "0.78rem" }}>
       שירותים מהקמת העסק: {result.ownerServicesSeeded} · עמודים שנסרקו: {result.pagesScanned}
-      {result.aiAvailable
-        ? ` · הוצעו ע״י AI: ${result.aiServicesProposed} · מוזגו עם קיימים: ${result.aiServicesMerged}`
-        : " · ניתוח AI לא מוגדר עדיין"}
+      {result.aiAvailable ? (
+        <>
+          {` · הוצעו ע״י AI: ${result.aiServicesProposed} · מוזגו עם קיימים: ${result.aiServicesMerged}`}
+          {result.aiCacheHit && " · נעשה שימוש בתוצאה קודמת (האתר לא השתנה - לא נשלחה פנייה חדשה ל-AI)"}
+          {!result.aiCacheHit && result.aiCostUsd != null && ` · עלות הפנייה: $${result.aiCostUsd.toFixed(4)}`}
+        </>
+      ) : (
+        " · ניתוח AI לא מוגדר עדיין"
+      )}
     </span>
   );
+}
+
+const AI_BLOCKED_REASON_LABELS: Record<string, string> = {
+  blocked_by_budget: "חסימת תקציב",
+  blocked_by_quota: "חסימת מכסה",
+  blocked_by_safety_limit: "חסימת מעגל בטיחות (כשלים חזרתיים)"
+};
+
+// Distinct from "AI not configured" (aiAvailable: false) and from a
+// genuine failure (AnalyzeAiError below): this is the Universal External
+// API Cost-Control Rule's own budget/quota/circuit-breaker guard
+// (functions/apiUsage.js) deliberately refusing the call - a safety
+// control doing its job, not a bug, so it gets its own distinct message.
+function AnalyzeAiBlocked({ result }: { result: AnalyzeBusinessResult }) {
+  if (!result.aiAvailable || !result.aiBlockedReason) return null;
+  return (
+    <p className="text-dim" style={{ fontSize: "0.78rem", marginBottom: 12 }}>
+      ניתוח ה-AI נחסם ({AI_BLOCKED_REASON_LABELS[result.aiBlockedReason] || result.aiBlockedReason}): {result.aiError}
+    </p>
+  );
+}
+
+// Distinct from both of the above - a genuine failure (bad/placeholder
+// key, network error, a response that didn't parse as JSON, or a website
+// that couldn't be read), not "AI never ran" and not "blocked by our own
+// cost control." Surfacing this distinction is the whole point of the
+// aiError field - "AI never ran," "AI ran and failed," and "AI was
+// blocked by our own budget/quota guard" used to all look identical from
+// this screen.
+function AnalyzeAiError({ result }: { result: AnalyzeBusinessResult }) {
+  if (!result.aiAvailable || result.aiBlockedReason || !result.aiError) return null;
+  return <div className="login-error">ניתוח ה-AI נכשל: {result.aiError}</div>;
 }
 
 export default function BusinessTopics() {
@@ -156,6 +195,11 @@ export default function BusinessTopics() {
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const [analyzeResult, setAnalyzeResult] = useState<AnalyzeBusinessResult | null>(null);
+  // Universal External API Cost-Control Rule: a cached result is reused by
+  // default (see functions/apiUsage.js) - this checkbox is the explicit
+  // "ignore a valid cache" escape hatch the rule requires force-refresh to
+  // be, never a way around the budget/quota/circuit-breaker checks below it.
+  const [forceRefreshAi, setForceRefreshAi] = useState(false);
 
   const [newServiceName, setNewServiceName] = useState("");
   const [newServiceDescription, setNewServiceDescription] = useState("");
@@ -165,6 +209,7 @@ export default function BusinessTopics() {
   const [discoveryError, setDiscoveryError] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<{ source: string; result: DiscoveryResult } | null>(null);
   const [semrushSeed, setSemrushSeed] = useState("");
+  const [forceRefreshSemrush, setForceRefreshSemrush] = useState(false);
 
   const [newTopicTitle, setNewTopicTitle] = useState("");
   const [newTopicNotes, setNewTopicNotes] = useState("");
@@ -197,7 +242,7 @@ export default function BusinessTopics() {
     setAnalyzing(true);
     setAnalyzeError(null);
     try {
-      const result = await analyzeBusiness(business.id);
+      const result = await analyzeBusiness(business.id, forceRefreshAi);
       setAnalyzeResult(result);
     } catch (err) {
       setAnalyzeError(err instanceof Error ? err.message : "שגיאה בניתוח העסק");
@@ -232,7 +277,7 @@ export default function BusinessTopics() {
           setRunningSource(null);
           return;
         }
-        result = await discoverFromSemrush(business.id, semrushSeed.trim());
+        result = await discoverFromSemrush(business.id, semrushSeed.trim(), undefined, forceRefreshSemrush);
       }
       setLastResult({ source, result });
     } catch (err) {
@@ -301,8 +346,14 @@ export default function BusinessTopics() {
         <button type="button" className="btn btn-outline" disabled={analyzing} onClick={handleAnalyzeBusiness}>
           {analyzing ? "מנתח…" : "נתח את העסק והאתר"}
         </button>
+        <label className="text-dim" style={{ fontSize: "0.78rem", display: "flex", alignItems: "center", gap: 4 }}>
+          <input type="checkbox" checked={forceRefreshAi} onChange={(e) => setForceRefreshAi(e.target.checked)} />
+          התעלם מתוצאה שמורה (רענון בכפייה)
+        </label>
         {analyzeResult && <AnalyzeResultSummary result={analyzeResult} />}
       </div>
+      {analyzeResult && <AnalyzeAiBlocked result={analyzeResult} />}
+      {analyzeResult && <AnalyzeAiError result={analyzeResult} />}
       {analyzeResult && !analyzeResult.aiAvailable && (
         <p className="text-dim" style={{ fontSize: "0.78rem", marginBottom: 12 }}>
           ניתוח AI (הצעת שירותים נוספים מתוך האתר) ממתין להגדרת מפתח Anthropic API - שירותים שהוגדרו בהקמת העסק עדיין
@@ -412,6 +463,14 @@ export default function BusinessTopics() {
           >
             {runningSource === "semrush" ? "מריץ…" : "גילוי מ-Semrush"}
           </button>
+          <label className="text-dim" style={{ fontSize: "0.78rem", display: "flex", alignItems: "center", gap: 4 }}>
+            <input
+              type="checkbox"
+              checked={forceRefreshSemrush}
+              onChange={(e) => setForceRefreshSemrush(e.target.checked)}
+            />
+            התעלם מתוצאה שמורה
+          </label>
         </div>
       </div>
       <p className="text-dim" style={{ fontSize: "0.78rem", marginBottom: 12 }}>
