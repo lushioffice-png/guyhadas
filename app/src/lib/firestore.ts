@@ -8,6 +8,7 @@ import {
   query,
   where,
   orderBy,
+  arrayUnion,
   limit,
   serverTimestamp,
   type Unsubscribe
@@ -213,8 +214,21 @@ export async function updateServicePriority(id: string, priority: TaskPriority) 
   return updateDoc(doc(db, "businessServices", id), { priority, updatedAt: serverTimestamp() });
 }
 
-export async function updateServiceDetails(id: string, data: { name?: string; description?: string; geographies?: string[] }) {
-  return updateDoc(doc(db, "businessServices", id), { ...data, updatedAt: serverTimestamp() });
+// previousName: when the owner renames an item, its old name is kept in
+// `aliases` so later analyses (incl. free cache-hit re-merges) still
+// recognize it - a rename must never bring the AI's original wording back
+// as a "new" candidate (functions/serviceMapMerge.js findKnownMatch).
+export async function updateServiceDetails(
+  id: string,
+  data: { name?: string; description?: string; geographies?: string[] },
+  previousName?: string
+) {
+  const renamed = previousName && data.name && data.name !== previousName;
+  return updateDoc(doc(db, "businessServices", id), {
+    ...data,
+    ...(renamed ? { aliases: arrayUnion(previousName) } : {}),
+    updatedAt: serverTimestamp()
+  });
 }
 
 // Manual service add (source: "owner", confirmed immediately) - the owner

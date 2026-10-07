@@ -119,6 +119,30 @@ const merge = (ctx, proposals) =>
     assert.strictEqual(rows[0].evidenceSources.length, 1, "evidence replaced, not appended");
   });
 
+  await test("M owner-renamed item is still recognized - the AI's original name does not come back", async () => {
+    // Owner renamed the AI item "שיפוץ קומפלט" to "שיפוץ דירות מקיף"; the
+    // saved (cached) AI answer still uses the original name.
+    const ctx = await setupMap([
+      { name: "שיפוץ דירות מקיף", aliases: ["שיפוץ קומפלט"], source: "ai_inference", ownerStatus: "confirmed", priority: "high", facetsVersion: 3 }
+    ]);
+    ctx.known[0].aliases = ["שיפוץ קומפלט"];
+    const r = await merge(ctx, [{ name: "שיפוץ קומפלט", existingName: null, evidence: [{ quote: "פרויקטים מסחריים", url: `${W}/מסחריים` }] }]);
+    assert.strictEqual(r.proposed, 0, "no new item for the renamed one");
+    assert.strictEqual(r.merged, 1);
+    const rows = ctx.fake.rows("businessServices");
+    assert.strictEqual(rows.length, 1);
+    assert.strictEqual(rows[0].name, "שיפוץ דירות מקיף", "owner's new name kept");
+    assert.strictEqual(rows[0].ownerStatus, "confirmed");
+  });
+
+  await test("M2 a renamed-then-rejected item stays out under its original name", async () => {
+    const ctx = await setupMap([{ name: "שם חדש לגמרי", aliases: ["עיצוב גרפי"], source: "ai_inference", ownerStatus: "rejected", facetsVersion: 3 }]);
+    ctx.known[0].aliases = ["עיצוב גרפי"];
+    const r = await merge(ctx, [{ name: "עיצוב גרפי", evidence: [] }]);
+    assert.strictEqual(r.proposed, 0);
+    assert.strictEqual(r.skippedRejected, 1);
+  });
+
   const ok = { ok: true, statusText: "OK" };
   const usage = { input_tokens: 10377, output_tokens: 12000 };
 

@@ -66,7 +66,26 @@ function parseAiServiceReply(res, json, maxTokens) {
   return { proposals: parsed, usage };
 }
 
-// known: [{ id, name, source, ownerStatus, facets, facetsVersion, tokens }]
+// Every name an existing item is known by: its current name plus the
+// names it had before the owner renamed it (`aliases`). Matching against
+// all of them means a rename never makes the AI's original wording come
+// back as a "new" candidate, and a renamed-then-rejected item stays out.
+function namesOf(item) {
+  return [item.name, ...(Array.isArray(item.aliases) ? item.aliases : [])].filter(Boolean);
+}
+
+function findKnownMatch(known, name, existingName) {
+  const tokens = tokenize(name);
+  if (existingName) {
+    const byExisting = known.find((s) => namesOf(s).includes(existingName));
+    if (byExisting) return byExisting;
+  }
+  const exact = known.find((s) => namesOf(s).includes(name));
+  if (exact) return exact;
+  return known.find((s) => namesOf(s).some((n) => jaccard(tokens, tokenize(n)) >= SERVICE_MERGE_THRESHOLD)) || null;
+}
+
+// known: [{ id, name, aliases?, source, ownerStatus, facets, facetsVersion, tokens }]
 // (mutated as items are created/updated, so later proposals in the same
 // run match against them too).
 async function mergeProposals({ db, businessId, known, proposals, corpus, inputHash, now, verifiedAt, facetsVersion }) {
@@ -79,9 +98,7 @@ async function mergeProposals({ db, businessId, known, proposals, corpus, inputH
     if (!name) continue;
     const tokens = tokenize(name);
     const existingName = p && typeof p.existingName === "string" ? p.existingName.trim() : "";
-    const match =
-      (existingName && known.find((s) => s.name === existingName)) ||
-      known.find((s) => jaccard(tokens, s.tokens) >= SERVICE_MERGE_THRESHOLD);
+    const match = findKnownMatch(known, name, existingName);
     if (match && match.ownerStatus === "rejected") {
       skippedRejected++; // never resurrect or modify what the owner rejected
       continue;
@@ -144,4 +161,4 @@ async function mergeProposals({ db, businessId, known, proposals, corpus, inputH
   return { proposed, merged, skippedRejected };
 }
 
-module.exports = { parseAiServiceReply, mergeProposals, SERVICE_MERGE_THRESHOLD };
+module.exports = { parseAiServiceReply, mergeProposals, findKnownMatch, SERVICE_MERGE_THRESHOLD };
