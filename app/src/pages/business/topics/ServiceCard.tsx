@@ -114,7 +114,7 @@ export function ServiceCard({ service }: { service: BusinessService }) {
     if (!name.trim()) return;
     setSaving(true);
     try {
-      await updateServiceDetails(service.id, { name: name.trim(), description: description.trim() });
+      await updateServiceDetails(service.id, { name: name.trim(), description: description.trim() }, service.name);
       setEditing(false);
     } finally {
       setSaving(false);

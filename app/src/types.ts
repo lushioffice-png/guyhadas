@@ -309,6 +309,8 @@ export interface BusinessService {
   // on items created before this existed until the next analysis run.
   facets?: ServiceFacets;
   facetsVersion?: number;
+  // Previous names after owner renames - still matched by later analyses.
+  aliases?: string[];
   createdAt: unknown;
   updatedAt: unknown;
 }

@@ -44,7 +44,7 @@ const { setCors, requireAdmin } = require("./visibility");
 const { tokenize, jaccard } = require("./textSimilarity");
 const { crawlSite } = require("./webUtils");
 const { runGoverned } = require("./apiUsage");
-const { parseAiServiceReply, mergeProposals, SERVICE_MERGE_THRESHOLD } = require("./serviceMapMerge");
+const { parseAiServiceReply, mergeProposals, findKnownMatch } = require("./serviceMapMerge");
 const apiLimits = require("./apiLimits");
 const { buildPageCorpus, ownerFacets, hasAnyFacet } = require("./serviceFacets");
 
@@ -252,6 +252,7 @@ exports.visibilityAnalyzeBusiness = functions
           name: data.name,
           source: data.source,
           ownerStatus: data.ownerStatus,
+          aliases: Array.isArray(data.aliases) ? data.aliases : [],
           facets: data.facets || null,
           facetsVersion: data.facetsVersion || 0,
           tokens: tokenize(data.name)
@@ -275,7 +276,9 @@ exports.visibilityAnalyzeBusiness = functions
         const name = (rawName || "").trim();
         if (!name) continue;
         const tokens = tokenize(name);
-        const match = known.find((s) => jaccard(tokens, s.tokens) >= SERVICE_MERGE_THRESHOLD);
+        // Current OR previous names (aliases): a renamed onboarding service is
+        // not re-seeded under its original wording.
+        const match = findKnownMatch(known, name, null);
         if (match) continue;
         const ref = await db.collection("businessServices").add({
           businessId,
