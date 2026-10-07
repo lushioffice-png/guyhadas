@@ -249,7 +249,10 @@ function ServiceFacetsView({ service }: { service: BusinessService }) {
 function AnalyzeResultSummary({ result }: { result: AnalyzeBusinessResult }) {
   return (
     <span className="text-dim" style={{ fontSize: "0.78rem" }}>
-      שירותים מהקמת העסק: {result.ownerServicesSeeded} · עמודים שנסרקו: {result.pagesScanned}
+      שירותים מהקמת העסק: {result.ownerServicesSeeded}
+      {result.crawl
+        ? ` · עמודים: התגלו ${result.crawl.pagesDiscovered} · נטענו ${result.crawl.pagesFetched} · נותחו ${result.crawl.pagesParsed} · נכשלו ${result.crawl.failedCount} · דולגו ${result.crawl.skippedCount}`
+        : ` · עמודים שנסרקו: ${result.pagesScanned}`}
       {result.aiAvailable ? (
         <>
           {` · הוצעו ע״י AI: ${result.aiServicesProposed} · מוזגו עם קיימים: ${result.aiServicesMerged}`}

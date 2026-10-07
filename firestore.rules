@@ -169,6 +169,14 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // One record per business-analysis run (crawl report + results),
+    // written only by functions/businessUnderstanding.js via the Admin SDK.
+    // Kept permanently - historical data is permanent per the roadmap.
+    match /businessAnalysisRuns/{runId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     // metrics / aiVisibilitySnapshots / contentAssets / experiments /
     // recommendations are not yet read or written by any client - left to
     // the blanket default-deny above until a later milestone actually

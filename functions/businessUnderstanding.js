@@ -42,7 +42,7 @@ const admin = require("firebase-admin");
 const cheerio = require("cheerio");
 const { setCors, requireAdmin } = require("./visibility");
 const { tokenize, jaccard } = require("./textSimilarity");
-const { extractDomain, fetchWithTimeout, discoverSitePages } = require("./webUtils");
+const { crawlSite } = require("./webUtils");
 const { runGoverned } = require("./apiUsage");
 const apiLimits = require("./apiLimits");
 const {
@@ -51,6 +51,7 @@ const {
   sanitizeAiEvidence,
   ownerFacets,
   mergeFacets,
+  keepOwnerFacets,
   hasAnyFacet
 } = require("./serviceFacets");
 
@@ -66,7 +67,8 @@ const ANTHROPIC_MODEL = "claude-sonnet-5-5";
 // part of the governed (cached) input, so a result cached under an older
 // prompt is never reused for the new shape - one fresh call, then cached
 // again as usual. v2 = structured facets + per-quote source URLs.
-const SERVICE_PROMPT_VERSION = 2;
+// v3 = multi-page crawl + per-page evidence attribution rules.
+const SERVICE_PROMPT_VERSION = 3;
 
 function isAiConfigured() {
   return !!process.env.ANTHROPIC_API_KEY;
@@ -81,12 +83,15 @@ function extractEvidenceFromHtml(html, url) {
   $("script, style, nav, footer, header").remove();
   const title = $("title").first().text().trim();
   const metaDescription = ($('meta[name="description"]').attr("content") || "").trim();
-  const headings = $("h1, h2")
+  // h3 included and the body excerpt raised from 600 chars: inner pages
+  // (services, client types, projects) carry their specifics below the
+  // first heading, and that page-specific text is the evidence we want.
+  const headings = $("h1, h2, h3")
     .map((_, el) => $(el).text().trim().replace(/\s+/g, " "))
     .get()
     .filter((t) => t.length > 0)
-    .slice(0, 10);
-  const bodyText = $("body").text().replace(/\s+/g, " ").trim().slice(0, 600);
+    .slice(0, 15);
+  const bodyText = $("body").text().replace(/\s+/g, " ").trim().slice(0, 1500);
   return { url, title, metaDescription, headings, bodyText };
 }
 
@@ -146,7 +151,8 @@ Rules:
 - Facet values are short terms in the website's language. Leave a dimension as an empty array when the evidence does not support it - never fill a dimension just to fill it.
 - Derive every value from the evidence or business context above. Do not invent.
 - Keep one item per offering as the website presents it; put its separate dimensions in facets rather than splitting it into several items.
-- "url" must be one of the page URLs listed above.
+- "url" must be one of the page URLs listed above, and must be the page the quote or value actually appears on.
+- Evidence must keep its originating page. When several pages support an item, give quotes from each of them (one evidence entry per page), and prefer the most specific page (e.g. a service or client-type page) over a general summary on the homepage.
 - Return between 2 and 15 items in total (already-known items included).`;
 }
 
@@ -221,7 +227,9 @@ function computeActualCostUsd(inputTokens, outputTokens) {
 }
 
 exports.visibilityAnalyzeBusiness = functions
-  .runWith({ secrets: ["ANTHROPIC_API_KEY"] })
+  // 300s: a crawl of up to 15 pages (8s timeout each, 5 at a time) plus the
+  // Claude call no longer fits safely in the 60s default.
+  .runWith({ secrets: ["ANTHROPIC_API_KEY"], timeoutSeconds: 300 })
   .https.onRequest(async (req, res) => {
     setCors(res);
     if (req.method === "OPTIONS") {
@@ -259,6 +267,7 @@ exports.visibilityAnalyzeBusiness = functions
           source: data.source,
           ownerStatus: data.ownerStatus,
           facets: data.facets || null,
+          facetsVersion: data.facetsVersion || 0,
           tokens: tokenize(data.name)
         };
       });
@@ -308,18 +317,36 @@ exports.visibilityAnalyzeBusiness = functions
         ownerServicesSeeded++;
       }
 
-      // Step 2: scrape the website for evidence (not for topics - see the
-      // file header).
+      // Step 2: crawl the website for evidence (not for topics - see the
+      // file header). crawlSite reports what it discovered/fetched/skipped;
+      // a page only counts as parsed if extraction found real text on it.
       let pagesEvidence = [];
+      let crawl = null;
       if (business.website) {
-        const domain = extractDomain(business.website);
-        const origin = `https://${domain}`;
-        const pages = await discoverSitePages(origin, cheerio);
-        for (const pageUrl of pages) {
-          const html = await fetchWithTimeout(pageUrl);
-          if (!html) continue;
-          pagesEvidence.push(extractEvidenceFromHtml(html, pageUrl));
+        const { pages, report } = await crawlSite(business.website, cheerio);
+        let pagesParsed = 0;
+        for (const page of pages) {
+          const evidence = extractEvidenceFromHtml(page.html, page.url);
+          const hasText = evidence.title || evidence.headings.length > 0 || evidence.bodyText.length > 40;
+          if (!hasText) {
+            report.failed.push({ url: page.url, reason: "no readable text after extraction" });
+            continue;
+          }
+          pagesEvidence.push(evidence);
+          pagesParsed++;
         }
+        crawl = {
+          ...report,
+          pagesParsed,
+          parsedUrls: pagesEvidence.map((p) => p.url),
+          skipped: report.skipped.slice(0, 50),
+          skippedCount: report.skipped.length,
+          failedCount: report.failed.length
+        };
+        console.log(
+          `visibilityAnalyzeBusiness crawl ${businessId}: discovered=${crawl.pagesDiscovered} selected=${crawl.pagesSelected} fetched=${crawl.pagesFetched} parsed=${crawl.pagesParsed} failed=${crawl.failedCount} skipped=${crawl.skippedCount}`,
+          JSON.stringify({ parsedUrls: crawl.parsedUrls, failed: crawl.failed })
+        );
       }
 
       // Step 3: AI-assisted inference, only if configured and there's
@@ -424,16 +451,30 @@ exports.visibilityAnalyzeBusiness = functions
                 // priority are left exactly as they are - only facets and
                 // evidence are added. Owner-provenance facet values always
                 // win over AI ones (mergeFacets).
-                const mergedFacets = mergeFacets(match.facets, facets);
+                // An item last analyzed under an older prompt/crawl version
+                // has its AI-derived facets and evidence REPLACED, not
+                // appended to: v2 and earlier only ever crawled the
+                // homepage, so their page attribution is superseded by this
+                // run's. Owner-provenance facet values are always kept.
+                const supersedes = (match.facetsVersion || 0) < SERVICE_PROMPT_VERSION;
+                const baseFacets = supersedes ? keepOwnerFacets(match.facets) : match.facets;
+                const mergedFacets = mergeFacets(baseFacets, facets);
                 const updateData = { updatedAt: now, facets: mergedFacets, facetsVersion: SERVICE_PROMPT_VERSION };
                 if (match.source === "owner") updateData.source = "combined";
-                if (evidence.length > 0) {
-                  updateData.evidence = admin.firestore.FieldValue.arrayUnion(...evidence);
-                  updateData.evidenceSources = admin.firestore.FieldValue.arrayUnion(...evidenceSources);
+                if (supersedes) {
+                  updateData.evidence = evidence;
+                  updateData.evidenceSources = evidenceSources;
+                  updateData.sourceUrls = sourceUrls;
+                } else {
+                  if (evidence.length > 0) {
+                    updateData.evidence = admin.firestore.FieldValue.arrayUnion(...evidence);
+                    updateData.evidenceSources = admin.firestore.FieldValue.arrayUnion(...evidenceSources);
+                  }
+                  if (sourceUrls.length > 0) updateData.sourceUrls = admin.firestore.FieldValue.arrayUnion(...sourceUrls);
                 }
-                if (sourceUrls.length > 0) updateData.sourceUrls = admin.firestore.FieldValue.arrayUnion(...sourceUrls);
                 await db.collection("businessServices").doc(match.id).update(updateData);
                 match.facets = mergedFacets;
+                match.facetsVersion = SERVICE_PROMPT_VERSION;
                 if (match.source === "owner") match.source = "combined";
                 aiServicesMerged++;
                 continue;
@@ -466,8 +507,39 @@ exports.visibilityAnalyzeBusiness = functions
         }
       }
 
+      // One record per run, kept permanently (historical data is permanent
+      // per the roadmap) - the crawl report plus what the run produced.
+      // Admin-read-only for clients; written only here via the Admin SDK.
+      const runSummary = {
+        ownerServicesSeeded,
+        aiServicesProposed,
+        aiServicesMerged,
+        pagesScanned: pagesEvidence.length,
+        aiAvailable,
+        aiError,
+        aiBlockedReason,
+        aiCacheHit,
+        aiCostUsd
+      };
+      let analysisRunId = null;
+      try {
+        const runRef = await db.collection("businessAnalysisRuns").add({
+          businessId,
+          kind: "service_map",
+          completedAt: admin.firestore.FieldValue.serverTimestamp(),
+          promptVersion: SERVICE_PROMPT_VERSION,
+          crawl,
+          ...runSummary
+        });
+        analysisRunId = runRef.id;
+      } catch (runErr) {
+        console.error("visibilityAnalyzeBusiness: could not record analysis run:", runErr.message);
+      }
+
       res.status(200).json({
         success: true,
+        analysisRunId,
+        crawl,
         ownerServicesSeeded,
         aiServicesProposed,
         aiServicesMerged,

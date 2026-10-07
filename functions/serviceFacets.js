@@ -55,12 +55,35 @@ function buildPageCorpus(pagesEvidence) {
 
 // Substring rather than token match on purpose: Hebrew attaches prefixes
 // (ל/ב/ה/ו...) to words with no space, so "מגורים" should count as found in
-// "למגורים". Returns the first page URL containing the text, or null.
-function findInCorpus(corpus, text) {
+// "למגורים". Returns every page URL containing the text (corpus order).
+function pagesContaining(corpus, text) {
   const needle = normalizeText(text);
-  if (needle.length < 2) return null;
-  const hit = corpus.find((page) => page.text.includes(needle));
-  return hit ? hit.url : null;
+  if (needle.length < 2) return [];
+  return corpus.filter((page) => page.text.includes(needle)).map((page) => page.url);
+}
+
+// Resolves which page a value/quote came from. Provenance rule: a
+// page-specific URL is never replaced by another page (in practice, the
+// homepage, which is first in the corpus and repeats summaries of
+// everything) just because that page also contains the text.
+//   - the page the AI attributed it to, if the text really is on it
+//   - otherwise the only/first page it is actually found on
+//   - otherwise (not found verbatim anywhere) the AI's attribution, if it
+//     names a page that was really crawled, unverified
+// Returns { sourceUrl, verified, foundOn }.
+function resolveSource(corpus, text, claimedUrl) {
+  const validUrls = new Set(corpus.map((p) => p.url));
+  const claimed = typeof claimedUrl === "string" && validUrls.has(claimedUrl) ? claimedUrl : null;
+  const foundOn = pagesContaining(corpus, text);
+  if (claimed && foundOn.includes(claimed)) return { sourceUrl: claimed, verified: true, foundOn };
+  if (foundOn.length > 0) return { sourceUrl: foundOn[0], verified: true, foundOn };
+  return { sourceUrl: claimed, verified: false, foundOn };
+}
+
+// Back-compat helper: first page containing the text, or null.
+function findInCorpus(corpus, text) {
+  const pages = pagesContaining(corpus, text);
+  return pages.length > 0 ? pages[0] : null;
 }
 
 function emptyFacets() {
@@ -75,8 +98,6 @@ function emptyFacets() {
 function sanitizeAiFacets(rawFacets, corpus) {
   const facets = emptyFacets();
   if (!rawFacets || typeof rawFacets !== "object") return facets;
-  const validUrls = new Set(corpus.map((p) => p.url));
-
   for (const dim of FACET_DIMENSIONS) {
     const rawList = Array.isArray(rawFacets[dim]) ? rawFacets[dim] : [];
     const seen = new Set();
@@ -87,12 +108,14 @@ function sanitizeAiFacets(rawFacets, corpus) {
       if (seen.has(key)) continue;
       seen.add(key);
 
-      const foundOn = findInCorpus(corpus, value);
-      const claimedUrl = raw && typeof raw.url === "string" && validUrls.has(raw.url) ? raw.url : null;
+      const src = resolveSource(corpus, value, raw && raw.url);
       facets[dim].push({
         value,
-        provenance: foundOn ? "website" : "ai_inference",
-        sourceUrl: foundOn || claimedUrl
+        provenance: src.verified ? "website" : "ai_inference",
+        sourceUrl: src.sourceUrl,
+        // Every crawled page the value appears on - a value supported by
+        // several pages keeps all of them, not just one.
+        foundOn: src.foundOn.slice(0, 5)
       });
       if (facets[dim].length >= MAX_VALUES_PER_DIMENSION) break;
     }
@@ -103,15 +126,13 @@ function sanitizeAiFacets(rawFacets, corpus) {
 // Evidence quotes keep their page URL, and are marked verified only if the
 // quote really appears in that run's scraped text.
 function sanitizeAiEvidence(rawEvidence, corpus) {
-  const validUrls = new Set(corpus.map((p) => p.url));
   const list = Array.isArray(rawEvidence) ? rawEvidence : [];
   const out = [];
   for (const raw of list) {
     const quote = (typeof raw === "string" ? raw : raw && raw.quote ? raw.quote : "").trim();
     if (!quote) continue;
-    const foundOn = findInCorpus(corpus, quote);
-    const claimedUrl = raw && typeof raw.url === "string" && validUrls.has(raw.url) ? raw.url : null;
-    out.push({ quote, sourceUrl: foundOn || claimedUrl, verified: !!foundOn });
+    const src = resolveSource(corpus, quote, raw && raw.url);
+    out.push({ quote, sourceUrl: src.sourceUrl, verified: src.verified });
     if (out.length >= MAX_EVIDENCE) break;
   }
   return out;
@@ -152,6 +173,16 @@ function mergeFacets(existing, incoming) {
   return merged;
 }
 
+// Only the owner's own facet values - used when a newer analysis version
+// supersedes everything the AI said before.
+function keepOwnerFacets(facets) {
+  const kept = emptyFacets();
+  for (const dim of FACET_DIMENSIONS) {
+    kept[dim] = ((facets && facets[dim]) || []).filter((v) => v.provenance === "owner");
+  }
+  return kept;
+}
+
 function hasAnyFacet(facets) {
   return !!facets && FACET_DIMENSIONS.some((dim) => Array.isArray(facets[dim]) && facets[dim].length > 0);
 }
@@ -161,10 +192,12 @@ module.exports = {
   normalizeText,
   buildPageCorpus,
   findInCorpus,
+  resolveSource,
   emptyFacets,
   sanitizeAiFacets,
   sanitizeAiEvidence,
   ownerFacets,
   mergeFacets,
+  keepOwnerFacets,
   hasAnyFacet
 };
