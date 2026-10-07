@@ -15,6 +15,36 @@
         { "fieldPath": "businessId", "order": "ASCENDING" },
         { "fieldPath": "retrievedAt", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "apiUsage",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "provider", "order": "ASCENDING" },
+        { "fieldPath": "operation", "order": "ASCENDING" },
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "retrievedAtMs", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "apiUsage",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "provider", "order": "ASCENDING" },
+        { "fieldPath": "operation", "order": "ASCENDING" },
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "retrievedAtMs", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "apiUsage",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "provider", "order": "ASCENDING" },
+        { "fieldPath": "operation", "order": "ASCENDING" },
+        { "fieldPath": "retrievedAtMs", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

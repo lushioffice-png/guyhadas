@@ -150,6 +150,25 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // --- Universal External API Cost-Control Rule (permanent project
+    // rule - see claude/visibility-os-api-cost-control-rule.md) ---
+    // apiUsage is the ledger/cache every governed provider call
+    // (functions/apiUsage.js's runGoverned) reads and writes, via the
+    // Admin SDK only - same posture as integrations/trafficSnapshots/
+    // searchSnapshots above: admin can read it (for cost/usage
+    // inspection), nothing is ever client-written. apiCircuitBreakers is
+    // the small per-provider/operation failure-streak doc the same module
+    // uses; no reason for a client to read or write it directly either.
+    match /apiUsage/{usageId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /apiCircuitBreakers/{breakerId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     // metrics / aiVisibilitySnapshots / contentAssets / experiments /
     // recommendations are not yet read or written by any client - left to
     // the blanket default-deny above until a later milestone actually
