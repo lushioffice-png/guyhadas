@@ -142,6 +142,28 @@ export interface AnalyzeBusinessResult {
   aiBlockedReason: "blocked_by_budget" | "blocked_by_quota" | "blocked_by_safety_limit" | null;
   aiCacheHit: boolean;
   aiCostUsd: number | null;
+  // null when the business has no website set.
+  crawl: CrawlReport | null;
+  analysisRunId: string | null;
+}
+
+// What the website crawl actually did in one analysis run
+// (functions/webUtils.js crawlSite + parsing in businessUnderstanding.js).
+// Also stored permanently in the businessAnalysisRuns collection.
+export interface CrawlReport {
+  startUrl: string | null;
+  siteHost: string | null;
+  sitemap: string | null;
+  pagesDiscovered: number;
+  pagesSelected: number;
+  pagesFetched: number;
+  pagesParsed: number;
+  discoveredVia: { homepageLinks: number; sitemap: number };
+  parsedUrls: string[];
+  failed: { url: string; reason: string }[];
+  failedCount: number;
+  skipped: { url: string; reason: string }[];
+  skippedCount: number;
 }
 
 export function analyzeBusiness(businessId: string, forceRefresh?: boolean): Promise<AnalyzeBusinessResult> {

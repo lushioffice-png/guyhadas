@@ -321,6 +321,9 @@ export interface FacetValue {
   value: string;
   provenance: FacetProvenance;
   sourceUrl: string | null;
+  // Every crawled page the value appears on (absent on values stored
+  // before page-level provenance was fixed).
+  foundOn?: string[];
 }
 
 export type FacetDimension =

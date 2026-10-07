@@ -51,12 +51,14 @@ const facets = sanitizeAiFacets(
   corpus
 );
 
-assert.deepStrictEqual(facets.services, [{ value: "עיצוב פנים", provenance: "website", sourceUrl: "https://example.co.il/" }]);
+assert.deepStrictEqual(facets.services, [
+  { value: "עיצוב פנים", provenance: "website", sourceUrl: "https://example.co.il/", foundOn: ["https://example.co.il/"] }
+]);
 assert.strictEqual(facets.projectTypes[0].provenance, "website", "value on the page is website-verified");
 assert.strictEqual(facets.projectTypes[0].sourceUrl, "https://example.co.il/", "verified page URL replaces the bogus claimed one");
 assert.deepStrictEqual(
   facets.markets[0],
-  { value: "Commercial", provenance: "ai_inference", sourceUrl: "https://example.co.il/" },
+  { value: "Commercial", provenance: "ai_inference", sourceUrl: "https://example.co.il/", foundOn: [] },
   "an interpretation not found verbatim stays ai_inference, keeping a valid claimed URL"
 );
 assert.strictEqual(facets.markets[1].provenance, "website", "'מגורים' is found inside 'למגורים' (prefix letter)");
@@ -75,6 +77,36 @@ const evidence = sanitizeAiEvidence(
 assert.deepStrictEqual(evidence[0], { quote: "שיפוץ קומפלט למגורים", sourceUrl: "https://example.co.il/renovation", verified: true });
 assert.deepStrictEqual(evidence[1], { quote: "a quote that is nowhere on the site", sourceUrl: null, verified: false });
 console.log("PASS: evidence quotes keep a real source URL and are marked verified only when found");
+
+// Regression: the homepage repeats a summary of everything, so text from
+// an inner page is often ALSO on the homepage. The page the AI attributed
+// it to must win when the text is really there - it must not collapse to
+// the homepage just because the homepage is first in the corpus.
+const corpus2 = buildPageCorpus([
+  { url: "https://www.example.co.il", title: "סטודיו", metaDescription: "", headings: ["אדריכלות ועיצוב פנים ללקוחות פרטיים"], bodyText: "" },
+  {
+    url: "https://www.example.co.il/לקוחות-פרטיים",
+    title: "פרטיים",
+    metaDescription: "",
+    headings: ["אדריכלות ועיצוב פנים ללקוחות פרטיים"],
+    bodyText: "כל פרויקט מתחיל בהקשבה"
+  }
+]);
+const inner = "https://www.example.co.il/לקוחות-פרטיים";
+const ev2 = sanitizeAiEvidence(
+  [
+    { quote: "אדריכלות ועיצוב פנים ללקוחות פרטיים", url: inner },
+    { quote: "כל פרויקט מתחיל בהקשבה", url: "https://www.example.co.il" }
+  ],
+  corpus2
+);
+assert.strictEqual(ev2[0].sourceUrl, inner, "text on both pages keeps the inner page the AI attributed it to");
+assert.strictEqual(ev2[0].verified, true);
+assert.strictEqual(ev2[1].sourceUrl, inner, "a wrong attribution is corrected to the page the text is actually on");
+const f2 = sanitizeAiFacets({ markets: [{ value: "לקוחות פרטיים", url: inner }] }, corpus2);
+assert.strictEqual(f2.markets[0].sourceUrl, inner);
+assert.deepStrictEqual(f2.markets[0].foundOn, ["https://www.example.co.il", inner], "all supporting pages are kept");
+console.log("PASS: page-specific source URLs are kept, never collapsed to the homepage");
 
 // 5
 const owner = ownerFacets("אדריכלות", ["קיסריה"]);
