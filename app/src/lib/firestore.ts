@@ -14,6 +14,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase";
 import type {
+  BusinessAnalysisRun,
   Business,
   Task,
   Opportunity,
@@ -240,6 +241,24 @@ export async function createManualService(businessId: string, name: string, desc
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
   });
+}
+
+// Latest business-analysis run (crawl report + results), written by
+// visibilityAnalyzeBusiness. Read-only here.
+export function listenLatestAnalysisRun(businessId: string, cb: (run: BusinessAnalysisRun | null) => void): Unsubscribe {
+  const q = query(
+    collection(db, "businessAnalysisRuns"),
+    where("businessId", "==", businessId),
+    orderBy("completedAt", "desc"),
+    limit(1)
+  );
+  return onSnapshot(
+    q,
+    (snap) => cb(snap.empty ? null : { id: snap.docs[0].id, ...(snap.docs[0].data() as Omit<BusinessAnalysisRun, "id">) }),
+    // Missing index while it builds, or no permission: show "no run yet"
+    // rather than breaking the page.
+    () => cb(null)
+  );
 }
 
 export async function deleteBusinessService(id: string) {

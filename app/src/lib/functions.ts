@@ -1,5 +1,5 @@
 import { auth } from "../firebase";
-import type { Ga4SnapshotData, SearchConsoleSnapshotData } from "../types";
+import type { Ga4SnapshotData, SearchConsoleSnapshotData, CrawlReport } from "../types";
 
 // Thin wrapper around the Visibility OS Cloud Functions (functions/visibility.js,
 // Milestone 2+). Same deployment shape as the existing public-site functions
@@ -147,24 +147,8 @@ export interface AnalyzeBusinessResult {
   analysisRunId: string | null;
 }
 
-// What the website crawl actually did in one analysis run
-// (functions/webUtils.js crawlSite + parsing in businessUnderstanding.js).
-// Also stored permanently in the businessAnalysisRuns collection.
-export interface CrawlReport {
-  startUrl: string | null;
-  siteHost: string | null;
-  sitemap: string | null;
-  pagesDiscovered: number;
-  pagesSelected: number;
-  pagesFetched: number;
-  pagesParsed: number;
-  discoveredVia: { homepageLinks: number; sitemap: number };
-  parsedUrls: string[];
-  failed: { url: string; reason: string }[];
-  failedCount: number;
-  skipped: { url: string; reason: string }[];
-  skippedCount: number;
-}
+// CrawlReport lives in types.ts (shared with businessAnalysisRuns records).
+export type { CrawlReport };
 
 export function analyzeBusiness(businessId: string, forceRefresh?: boolean): Promise<AnalyzeBusinessResult> {
   return callFunction<AnalyzeBusinessResult>("visibilityAnalyzeBusiness", { businessId, forceRefresh });

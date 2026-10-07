@@ -373,3 +373,41 @@ export const SERVICE_OWNER_STATUS_LABELS: Record<ServiceOwnerStatus, string> = {
   rejected: "נדחה",
   needs_review: "ממתין לבדיקה"
 };
+
+// What the website crawl actually did in one analysis run
+// (functions/webUtils.js crawlSite + parsing in businessUnderstanding.js).
+// Also stored permanently in the businessAnalysisRuns collection.
+export interface CrawlReport {
+  startUrl: string | null;
+  siteHost: string | null;
+  sitemap: string | null;
+  pagesDiscovered: number;
+  pagesSelected: number;
+  pagesFetched: number;
+  pagesParsed: number;
+  discoveredVia: { homepageLinks: number; sitemap: number };
+  parsedUrls: string[];
+  failed: { url: string; reason: string }[];
+  failedCount: number;
+  skipped: { url: string; reason: string }[];
+  skippedCount: number;
+}
+
+// One record per visibilityAnalyzeBusiness run (businessAnalysisRuns).
+export interface BusinessAnalysisRun {
+  id: string;
+  businessId: string;
+  kind: "service_map";
+  completedAt: unknown;
+  promptVersion: number;
+  crawl: CrawlReport | null;
+  ownerServicesSeeded: number;
+  aiServicesProposed: number;
+  aiServicesMerged: number;
+  pagesScanned: number;
+  aiAvailable: boolean;
+  aiError: string | null;
+  aiBlockedReason: string | null;
+  aiCacheHit: boolean;
+  aiCostUsd: number | null;
+}

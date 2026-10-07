@@ -29,7 +29,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <main className="app-main">{children}</main>
+      <main className="app-main">
+        <div className="app-main-inner">{children}</div>
+      </main>
     </div>
   );
 }
