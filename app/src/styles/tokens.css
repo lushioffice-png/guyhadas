@@ -9,7 +9,9 @@
   --color-border: rgba(255, 255, 255, 0.09);
   --color-text: #E2E8F0;
   --color-text-muted: #94A3B8;
-  --color-text-dim: #64748B;
+  /* Raised from #64748B (~4:1 on the background) - secondary text carries
+     real information here (sources, counts), so it must stay readable. */
+  --color-text-dim: #8392A8;
 
   --color-accent: #10B981;
   --color-accent-strong: #047857;
@@ -27,6 +29,8 @@
   --radius-lg: 16px;
 
   --font-sans: "Heebo", -apple-system, BlinkMacSystemFont, sans-serif;
+
+  --content-max-width: 1120px;
 
   --space-1: 4px;
   --space-2: 8px;
@@ -48,6 +52,8 @@ html, body, #root {
 body {
   margin: 0;
   font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.55;
   background: var(--color-bg);
   color: var(--color-text);
   -webkit-font-smoothing: antialiased;
