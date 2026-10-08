@@ -998,3 +998,1101 @@ Progression should depend on evidence such as:
 - low duplication
 - reliable data
 - Search Console feedback
+
+---
+
+# 28. Measurement Model
+
+Measure outcomes at four levels.
+
+## 28.1 Query
+
+- impressions
+- clicks
+- CTR
+- position
+- query emergence
+- query volatility
+
+## 28.2 Page
+
+- impressions
+- clicks
+- CTR
+- rankings
+- indexed state
+- traffic
+- engagement
+- conversions
+
+## 28.3 Topic / Intent
+
+- visibility
+- owned-query coverage
+- competing pages
+- intent coverage
+- opportunity coverage
+
+## 28.4 Business
+
+- qualified traffic
+- leads
+- revenue/conversion where available
+- commercial intent
+- acquisition efficiency
+
+Measurement must preserve the distinction between observation, interpretation, attribution and outcome.
+
+---
+
+# 29. Technical SEO Layer
+
+Technical SEO is a gate and diagnostic layer, not the main strategic engine.
+
+Checks should include where data is available:
+
+- indexability
+- canonical
+- robots
+- sitemap
+- lastmod
+- structured data
+- breadcrumbs
+- page speed / Core Web Vitals
+- internal links
+- orphan pages
+- duplicate content
+- broken links
+- rendering
+- metadata
+
+---
+
+# 30. Content Page Specification
+
+Every proposed page should eventually have a machine-readable Page Brief.
+
+Minimum conceptual fields:
+
+```text
+page_id
+canonical_url
+page_type
+primary_intent
+secondary_intents
+primary_entity
+related_entities
+target_query_family
+existing_owner
+reason_to_exist
+content_requirements
+unique_information_required
+source_requirements
+internal_links_in
+internal_links_out
+schema_requirements
+localization_status
+publish_gate
+quality_score
+cannibalization_status
+decision
+```
+
+Claude and other implementation/content agents should receive this structured Decision/Page Brief rather than an unstructured keyword list.
+
+---
+
+# 31. Content Workflow
+
+Recommended workflow:
+
+```text
+Research
+ ↓
+Draft
+ ↓
+Source / Evidence Review
+ ↓
+Intent Review
+ ↓
+Entity Review
+ ↓
+Quality Gate
+ ↓
+Cannibalization Gate
+ ↓
+Technical Gate
+ ↓
+Internal Link Pass
+ ↓
+Publish
+ ↓
+Measurement
+ ↓
+Scheduled Re-review
+```
+
+For sensitive or current content, `last_reviewed_at` is mandatory.
+
+---
+
+# 32. Caching & Reuse
+
+All expensive research and analysis operations should be reusable.
+
+Conceptually:
+
+```text
+analysis_key =
+hash(
+  project
+  + task
+  + normalized_inputs
+  + provider
+  + model
+  + prompt_version
+  + analysis_version
+)
+```
+
+If the same analysis is requested with unchanged semantic inputs and versions:
+
+```text
+CACHE HIT
+→ stored result
+→ no provider/API call
+→ cost = $0
+```
+
+Cache identity must exclude timestamps, run IDs and request IDs.
+
+A cache miss records the provider call and result.
+
+The system must expose whether a result was cached/reused rather than silently executing the provider again.
+
+A failed cache/safety/quota lookup is a fail-closed condition. It must not be interpreted as a cache miss.
+
+---
+
+# 33. Provider Independence
+
+External providers are replaceable adapters.
+
+The decision/intelligence layer should consume normalized observations rather than depend on provider-specific terminology.
+
+Conceptually:
+
+```text
+Semrush
+Search Console
+Google SERP data
+LLM analysis
+Website crawler
+Other providers
+      ↓
+Provider adapters
+      ↓
+Normalized observations
+      ↓
+Evidence / Intelligence layer
+      ↓
+Opportunity / Decision layer
+```
+
+---
+
+# 34. Universal API Governance
+
+All external APIs are potentially expensive, quota-limited or failure-prone.
+
+Therefore:
+
+1. No expensive external API call directly from the UI.
+2. Route provider work through a governed operation/job path.
+3. Require an explicit reason for the operation.
+4. Check cache/history before calling the provider.
+5. Build a deterministic request/input fingerprint.
+6. Prefer local deterministic processing before paid reasoning.
+7. Minimize, deduplicate and batch requests.
+8. Enforce operation, business and global budgets where applicable.
+9. Enforce record/output caps.
+10. Use retries/backoff/idempotency and circuit breakers.
+11. Maintain a generic `apiUsage` ledger.
+12. Maintain provider-specific limits and application-level hard limits.
+13. Force refresh must be explicit, non-sticky and still subject to hard limits.
+14. Never re-run paid analysis merely because a page rendered, a deploy happened or a component mounted.
+15. Capture cost and provider-call state for every governed operation.
+
+Ledger states should distinguish at least:
+
+```text
+cache_hit
+cache_miss
+force_refresh
+provider_called
+blocked
+error
+success
+```
+
+A cache hit must have providerCalled=false and cost=$0.
+
+The governance contract is:
+
+```text
+CACHE / HISTORY
+      ↓
+SAFETY / QUOTA CHECK
+      ↓
+COST ESTIMATE
+      ↓
+PROVIDER CALL
+      ↓
+STORE RESULT + LEDGER
+```
+
+If cache lookup, quota lookup or governance infrastructure fails, the system must stop rather than spend blindly.
+
+### Current production-readiness note
+
+Anthropic and Semrush operations are governed by the current cost-control architecture.
+
+Google APIs used by visibility/analytics flows are not yet fully normalized under the same governance path and remain a production-hardening gap. Do not treat this as permission to add new ungoverned calls in M3.2.
+
+---
+
+# 35. Claude / AI Agent Handoff
+
+Claude is an implementation agent, not the strategic owner of the SEO universe.
+
+A coding/content implementation task should be generated from structured intelligence:
+
+```text
+Decision
+  ↓
+Page Brief / Task Brief
+  ↓
+Evidence IDs
+  ↓
+Acceptance Criteria
+  ↓
+Claude / Agent
+```
+
+The handoff should tell the agent:
+
+- what to change
+- why
+- which entity/intent/page is involved
+- what evidence supports it
+- what must not change
+- acceptance criteria
+- measurement implications
+
+The agent should execute a decision rather than invent a new strategic SEO direction.
+
+---
+
+# 36. Admin / Strategy UI
+
+The strategic UI should eventually expose:
+
+## Search Universe
+
+- topics
+- query families
+- entities
+- evidence
+- relevance
+- intent
+- business value
+- owner status
+
+## Opportunities
+
+- CREATE
+- IMPROVE
+- CONSOLIDATE
+- WAIT
+- MONITOR
+- REJECT
+
+## Pages
+
+- current owner
+- intent
+- entity
+- rankings
+- Search Console queries
+- technical health
+- uniqueness
+- internal links
+- active predictions
+
+## Learning
+
+- predictions
+- outcomes
+- misses
+- prediction error
+- attribution confidence
+- repeated patterns
+
+---
+
+# 37. Core KPIs
+
+### Strategic
+
+- % of important intents with a canonical owner
+- % of pages with a defined primary intent
+- % of opportunities backed by evidence
+- % of new pages passing publish gate
+- cannibalization rate
+- duplicate-page rejection rate
+- page improvement vs page creation ratio
+- orphan-page rate
+- internal-link coverage
+- entity consistency rate
+
+### Learning
+
+- predicted vs actual intent accuracy
+- predicted vs actual opportunity value
+- Search Console discovery rate
+- recommendation acceptance rate
+- recommendation success rate
+- time from signal → opportunity → action
+- % of recommendations reused from cache
+
+### Cost
+
+- provider calls
+- cache hit rate
+- API cost per analysis
+- API cost per opportunity
+- API cost per published page
+
+---
+
+# 38. Time-to-Impact Prediction & Outcome Learning
+
+Time-to-Impact is a first-class capability integrated into Opportunity, Decision, Measurement and Learning.
+
+The closed loop becomes:
+
+```text
+OBSERVE
+  ↓
+DIAGNOSE
+  ↓
+RECOMMEND
+  ↓
+PREDICT
+  ↓
+IMPLEMENT
+  ↓
+MONITOR
+  ↓
+MEASURE
+  ↓
+COMPARE PREDICTION vs ACTUAL
+  ↓
+LEARN
+  ↺
+```
+
+Do not create a separate prediction subsystem.
+
+## 38.1 ImpactPrediction
+
+Persistent conceptual object:
+
+```text
+prediction_id
+opportunity_id
+decision_id
+project_id
+target_type
+target_id
+prediction_version
+model_version
+baseline_snapshot_id
+predicted_first_signal_min_days
+predicted_first_signal_max_days
+predicted_meaningful_impact_min_days
+predicted_meaningful_impact_max_days
+predicted_traffic_impact
+predicted_visibility_impact
+predicted_ranking_impact
+confidence
+prediction_factors[]
+observation_window_start
+observation_window_end
+status
+created_at
+updated_at
+```
+
+The exact schema may evolve; the distinction between prediction and observation must remain explicit.
+
+## 38.2 Ranges, not exact dates
+
+Never promise a single exact SEO-impact date.
+
+Predictions should be ranges, for example:
+
+```text
+Expected first signal: 2–5 weeks
+Expected meaningful impact: 6–12 weeks
+Confidence: 78%
+```
+
+## 38.3 Three impact stages
+
+1. Discovery / indexation signal
+2. SEO signal
+3. Meaningful business impact
+
+These stages must remain separate.
+
+## 38.4 Prediction factors
+
+Consider, where observable:
+
+### Website
+
+- domain age
+- historical organic visibility
+- authority proxy
+- referring domains/backlink strength
+- existing organic traffic
+- indexed pages
+- crawl activity
+- Search Console activity
+- historical responsiveness to SEO changes
+- technical health
+- site size
+- topical authority
+- historical volatility
+
+### Page
+
+- current ranking
+- impressions
+- clicks
+- CTR
+- query coverage
+- page age
+- page authority
+- internal links
+- orphan status
+- indexation status
+- historical trajectory
+
+### Query
+
+- search demand
+- competition
+- SERP volatility
+- current position
+- distance to page one
+- distance to target position
+- intent clarity
+- query-family size
+- commercial value
+
+### Recommendation
+
+- recommendation type
+- change magnitude
+- content expansion
+- intent correction
+- internal linking
+- metadata change
+- technical fix
+- schema change
+- consolidation
+- new page
+- authority work
+- freshness update
+- entity coverage
+- content quality improvement
+
+### External
+
+- SERP volatility
+- competitor movement
+- seasonality
+- major search ecosystem changes
+- algorithm/update periods
+- market demand changes
+
+## 38.5 Baseline
+
+No impact prediction should be evaluated without a baseline.
+
+Capture an immutable baseline snapshot before implementation where applicable:
+
+```text
+target URL
+target query family
+average position
+impressions
+clicks
+CTR
+indexed state
+organic sessions where available
+conversions where available
+ranking distribution
+query count
+date range
+competitor/SERP context where available
+```
+
+## 38.6 Change event
+
+Every implemented recommendation must produce an `SEOChangeEvent`:
+
+```text
+change_event_id
+opportunity_id
+decision_id
+target_page_id
+change_type
+implementation_timestamp
+publication_timestamp
+implementation_status
+before_snapshot_id
+after_snapshot_id
+changed_elements[]
+responsible_actor
+implementation_notes
+```
+
+## 38.7 Observation states
+
+Use dynamic observation windows.
+
+Suggested states:
+
+```text
+TOO_EARLY
+NO_SIGNAL_YET
+EARLY_SIGNAL
+SEO_SIGNAL
+MEANINGFUL_IMPACT
+UNDERPERFORMING
+FAILED
+INCONCLUSIVE
+CHANGE_IN_OBSERVATION_WINDOW
+```
+
+A recommendation must not be marked failed merely because it has not yet reached its predicted evaluation window.
+
+## 38.8 Attribution
+
+Distinguish:
+
+> the page improved after the change
+
+from:
+
+> the change caused the improvement.
+
+Consider:
+
+- algorithm changes
+- seasonality
+- competitor changes
+- site-wide changes
+- backlinks
+- other content changes
+- technical changes
+- demand changes
+
+Where possible compare:
+
+- pre/post period
+- target vs non-target queries
+- target page vs comparable pages
+- target query family vs control families
+- site-wide trend
+
+Never present correlation as proven causation.
+
+## 38.9 Prediction error and learning
+
+Every completed observation should preserve:
+
+```text
+original recommendation
+original baseline
+prediction
+implementation
+observation window
+actual result
+prediction error
+attribution confidence
+final outcome
+```
+
+Then learn by:
+
+- recommendation type
+- website
+- authority level
+- starting position
+- industry
+- query difficulty
+- page type
+
+Phase 1 is heuristic/configurable priors.
+
+Phase 2 is an empirical learned model once sufficient historical observations exist.
+
+Do not introduce ML prematurely.
+
+## 38.10 Recommendation churn prevention
+
+If a page has a recent material SEO change and remains inside its expected observation window, the system should generally avoid recommending another major overlapping change unless there is a strong reason.
+
+This protects measurement quality and avoids self-interference.
+
+## 38.11 SEOExperiment
+
+When multiple recommendations affect the same page close together, group them into:
+
+```text
+SEOExperiment
+{
+  experiment_id
+  page_id
+  opportunity_ids[]
+  change_event_ids[]
+  baseline_snapshot_id
+  prediction_id
+  start_date
+  observation_end_date
+  status
+  outcome
+  attribution_confidence
+}
+```
+
+---
+
+# 39. LLM Website Understanding
+
+The system must eventually include a dedicated **LLM Website Understanding** capability.
+
+This is not a separate keyword research system.
+
+It must connect to the same model:
+
+```text
+Business
+ → Business Understanding
+ → Entities
+ → Services / Offers
+ → Search Topics
+ → Intent
+ → Pages
+ → Outcomes
+```
+
+The system should periodically be able to ask, using one or more supported LLMs:
+
+### What does the model understand this business to be?
+
+Evaluate:
+
+- business identity
+- services
+- products/offers
+- audiences
+- locations
+- markets
+- positioning
+- differentiators
+- entities associated with the business
+- what the website appears to specialize in
+
+### What evidence is the model relying on?
+
+Record:
+
+- pages
+- sections
+- structured data
+- canonical facts
+- cited/extracted evidence
+- confidence
+- contradictions
+
+### What does the model think is missing or unclear?
+
+Identify:
+
+- unclear services
+- ambiguous entities
+- weak positioning
+- missing location context
+- incomplete offer descriptions
+- unclear relationships
+- poor machine-readable structure
+
+### Does the model associate the business with the wrong things?
+
+Detect:
+
+- hallucinated services
+- wrong geography
+- incorrect category
+- competitor confusion
+- stale facts
+- entity collisions
+- unsupported claims
+
+### Is the website AI-readable?
+
+Evaluate whether the important business facts are:
+
+- explicit
+- consistent
+- discoverable
+- structured
+- attributable to clear pages
+- represented consistently across the site
+
+This capability should produce evidence and recommendations, not merely a textual LLM summary.
+
+It should ultimately connect to:
+
+```text
+LLM Understanding
+      ↓
+Entity / Business Understanding
+      ↓
+Search Universe
+      ↓
+Intent
+      ↓
+SEO + GEO Intelligence
+      ↓
+Opportunity / Decision
+```
+
+Monitoring AI visibility in ChatGPT, Gemini, Copilot, Perplexity and other AI systems remains a later implementation milestone, but the architecture must support it.
+
+---
+
+# 40. Implementation Roadmap
+
+## Completed
+
+### M1 — Foundation
+System foundation, Firestore, application structure and core plumbing.
+
+### M2 — GA4 + Search Console
+Analytics and Search Console connectivity and baseline visibility flows.
+
+### M3.1 — Business & Service Discovery
+Completed and accepted.
+
+### M3.1 acceptance outcome
+
+Real-world acceptance validated:
+
+- multi-page website crawl/report
+- candidate services beyond onboarding
+- page-level evidence on inner pages
+- multiple provenance types
+- useful facets
+- owner confirm/reject/edit/add/prioritize
+- durable rejection
+- renamed/rejected item protection through alias handling
+- repeated identical runs reused from cache at $0
+- changed-input run blocked by daily quota at $0
+- no silent provenance corruption
+- final paid run completed within the expected cost envelope
+
+M3.1 is therefore treated as **DONE**.
+
+---
+
+## Current
+
+### M3.2 — Search Universe & Qualification
+
+M3.2 is the current implementation milestone.
+
+Contract:
+
+```text
+CONFIRMED SERVICE / OFFER MAP
+        ↓
+DETERMINISTIC SEED BUILDER
+        ↓
+MARKET DISCOVERY
+        ↓
+RAW QUERIES
+        ↓
+FILTERING
+        ↓
+NORMALIZATION
+        ↓
+QUERY FAMILIES
+        ↓
+SEARCH TOPICS
+        ↓
+LIGHTWEIGHT QUALIFICATION
+        ↓
+OWNER REVIEW
+        ↓
+APPROVED SEARCH UNIVERSE
+```
+
+M3.2 must:
+
+- use confirmed Service Map data only
+- use owner-first facet precedence
+- use service-area geography as a primary seed
+- treat project-only locations as evidence/context unless explicitly validated as target geography
+- use governed provider access
+- preserve raw query provenance
+- normalize deterministically
+- group query families without losing raw queries
+- persist durable owner rejection
+- keep Search Topics above raw query rows
+- provide traceability from seed → query → topic → evidence
+- avoid low-volume deletion as an automatic strategy rule
+- fail closed on governance/cache/quota failures
+- avoid page/task/opportunity side effects
+- avoid provider calls on page render
+
+### M3.2 scope boundary
+
+M3.2 does NOT implement:
+
+- full Entity Graph
+- full Search Intent ownership
+- full cannibalization engine
+- Opportunity automation
+- Decision automation
+- Time-to-Impact
+- prediction learning
+- autonomous content publishing
+- advanced GEO monitoring
+- full LLM Website Understanding monitoring
+
+Those remain future milestones.
+
+---
+
+# 41. Future Milestones
+
+### M4 — Search Intelligence & Baseline
+
+- full Search Topic intelligence
+- SEO intelligence
+- GEO intelligence
+- technical SEO diagnostics
+- immutable baselines
+- SERP context
+
+### M5 — Opportunity Engine
+
+- evidence-backed opportunities
+- CREATE vs IMPROVE candidates
+- opportunity scoring
+- business value
+- prioritization
+
+### M6 — Decision Engine
+
+- Search Intent object
+- canonical ownership
+- cannibalization
+- CREATE / IMPROVE / CONSOLIDATE / WAIT / MONITOR / REJECT
+- explainability
+
+### M7 — Change / Experiment Tracking
+
+- SEOChangeEvent
+- SEOExperiment
+- observation windows
+- recommendation churn prevention
+
+### M8 — Measurement
+
+- outcome measurement
+- pre/post comparison
+- control/comparison views
+- attribution confidence
+
+### M9 — Learning
+
+- prediction error
+- recommendation outcomes
+- empirical learning dataset
+- calibration
+
+### M10 — SEO / GEO Research & Analysis Agents
+
+- repeatable research agents
+- structured evidence collection
+- specialized diagnosis/analysis
+
+### M11 — Content & Authority Execution
+
+- page briefs
+- content workflows
+- internal linking
+- schema
+- authority workflows
+- governed publishing
+
+### M12 — Expanded GEO
+
+- AI visibility monitoring
+- ChatGPT / Gemini / Copilot / Perplexity observation
+- mentions
+- citations
+- cited URLs/domains
+- competitor AI visibility
+- entity recognition
+- AI answer coverage
+
+### M13 — Continuous Search Visibility Loop
+
+```text
+OBSERVE
+ → UNDERSTAND
+ → DISCOVER
+ → QUALIFY
+ → ANALYZE
+ → DECIDE
+ → PREDICT
+ → EXECUTE
+ → MEASURE
+ → LEARN
+ → REPRIORITIZE
+ → REPEAT
+```
+
+### Future growth domains
+
+The same operating-system architecture may later extend to:
+
+- PPC
+- paid social
+- CRO
+- email
+- additional acquisition channels
+
+These are deliberately outside the current SEO/GEO implementation scope.
+
+---
+
+# 42. Production Hardening / Scale Requirements
+
+Before the system is treated as production-grade for broad external use, complete:
+
+- universal API governance for all Google/analytics/visibility flows
+- rate limiting and abuse protection
+- systematic auth/authorization instead of legacy allowlists
+- secret management verification
+- operation/job observability
+- error budgets and circuit breakers
+- idempotency
+- audit logs
+- cache integrity
+- provider failure handling
+- automated regression tests
+- browser acceptance tests
+- deployment safety
+- schema migration discipline
+- documentation/ADR upkeep
+
+Existing legacy calendar/email functions must not silently become the pattern for new Visibility OS APIs.
+
+---
+
+# 43. Implementation Rules That Must Always Hold
+
+1. Extend existing architecture; do not create parallel subsystems for the same capability.
+2. Firestore remains the system of record.
+3. External providers remain adapters.
+4. Website is evidence, not the Search Universe.
+5. Owner truth outranks AI inference.
+6. Search volume is evidence, not strategy.
+7. Search demand is not page demand.
+8. A new query does not automatically justify a new URL.
+9. Existing intent ownership should default toward improving the owner page.
+10. Every important recommendation must be evidence-backed and explainable.
+11. Predictions use ranges, not false precision.
+12. Baselines are immutable.
+13. Correlation must not be presented as proven causation.
+14. Recent material changes should prevent recommendation churn during observation windows.
+15. Expensive analysis must be cached and reuse must cost $0.
+16. Cache/governance/quota failures are fail-closed.
+17. UI rendering must never trigger paid provider calls.
+18. Rejected owner decisions are durable negative signals.
+19. Do not smuggle later milestones into an earlier milestone.
+20. No action is a valid system outcome.
+
+---
+
+# 44. Master Acceptance Criteria
+
+The architecture is complete only when the system can reliably answer a newly discovered query/topic:
+
+1. What does the business actually offer?
+2. What entity is this about?
+3. What is the user's task?
+4. What intent does it represent?
+5. Is the intent already owned?
+6. If yes, by which page?
+7. Should that page be improved?
+8. If not, is a new page justified?
+9. What evidence supports the decision?
+10. What would make the proposed page unique?
+11. What internal links should connect it?
+12. What technical/schema requirements apply?
+13. What is the expected business/SEO/GEO value?
+14. What confidence does the system have?
+15. What is the cost of performing the analysis?
+16. Was the analysis already performed and cached?
+17. What baseline existed before implementation?
+18. What is the expected first-signal range?
+19. What is the expected meaningful-impact range?
+20. When should the system check again?
+21. What happened after implementation?
+22. Did the result fall inside the predicted range?
+23. What was the prediction error?
+24. How confident are we that the change caused the result?
+25. What should the system learn?
+26. What should it do next?
+27. Does the LLM correctly understand the business and its important entities?
+28. Is the recommendation inside the current milestone boundary?
+
+When these questions can be answered reliably, the system has moved from SEO research automation toward a genuine SEO operating system.
+
+---
+
+# 45. Canonical Document Status
+
+This file is the canonical Source of Truth for the GuyHadas Visibility OS.
+
+Any implementation agent must:
+
+1. read this file first
+2. inspect the current repository state
+3. respect the current milestone boundary
+4. reuse existing architecture
+5. update implementation notes/ADRs when architecture changes
+6. keep roadmap/status synchronized
+7. never invent missing requirements merely because the code does not yet implement them
+8. explicitly document blocked or deferred capabilities
+
