@@ -4,7 +4,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { SubTabs, useSubTab } from "../../components/ui/SubTabs";
 import { listenTopicIntelligence, listenSeoPages, listenLatestIntelligenceRun, listenBaselines } from "../../lib/firestore";
 import { runSearchIntelligence, captureBaseline, governedDetails } from "../../lib/functions";
-import { DECISION_TEXT, needsAttention, when } from "../../lib/plainLanguage";
+import { DECISION_TEXT, needsReview, when } from "../../lib/plainLanguage";
 import type { Baseline, IntelligenceRun, SeoPage, TopicIntelligence } from "../../types";
 import type { BusinessContext } from "./BusinessWorkspace";
 import { SnapshotTab } from "./intelligence/SnapshotTab";
@@ -42,7 +42,7 @@ export default function BusinessIntelligence() {
     return () => unsubs.forEach((u) => u());
   }, [business]);
 
-  const attentionCount = (pages || []).filter((p) => p.crawlStatus === "fetched" && needsAttention(p)).length;
+  const attentionCount = (pages || []).filter((p) => p.crawlStatus === "fetched" && needsReview(p)).length;
   const geoGaps = (run?.geoReadiness?.signals || []).filter((g) => g.status === "missing" || g.status === "partial").length;
   const tabs = [
     { id: "snapshot", label: "תמונת מצב" },

@@ -86,28 +86,39 @@ export function needsAttention(p: SeoPage): boolean {
 // levels so not every flagged page looks broken; the diagnostics and the
 // needsAttention calculation are unchanged.
 //   important - can stop the page from being included / points Google elsewhere
-//   check     - worth a look (missing title/H1, broken structured data,
-//               no internal links among the crawled pages)
-//   ok        - nothing from the attention set (housekeeping notes, if any,
-//               stay in the row details)
+//   check     - a review-worthy quality issue (missing title/H1, broken
+//               structured data)
+//   ok        - nothing that needs the owner's attention. Observations such
+//               as "no internal link from the crawled pages" stay visible in
+//               the row details but never raise the level on their own: a
+//               page without inbound links is not automatically a problem.
 const IMPORTANT = new Set(["non_indexable", "blocked_by_robots", "canonical_conflicting", "canonical_points_elsewhere"]);
+const REVIEW = new Set(["title_missing", "h1_missing", "structured_data_invalid"]);
+// Diagnostics shown in details as information only (no priority effect).
+export const INFO_ONLY = new Set(["no_inbound_from_crawled_pages", "underlinked_candidate", "not_in_sitemap", "structured_data_missing", "meta_description_missing", "meta_description_duplicate", "title_duplicate", "h1_multiple"]);
 
 export type PagePriority = "important" | "check" | "ok";
 
 export function pagePriority(p: SeoPage): PagePriority {
   if (p.diagnostics.some((d) => IMPORTANT.has(d.code))) return "important";
-  if (needsAttention(p)) return "check";
+  if (p.diagnostics.some((d) => REVIEW.has(d.code))) return "check";
   return "ok";
+}
+
+// Pages the owner should look at (red or yellow) - what the summary counts.
+export function needsReview(p: SeoPage): boolean {
+  return pagePriority(p) !== "ok";
 }
 
 export const PRIORITY_DISPLAY: Record<PagePriority, { tone: StatusTone; text: string; help: string }> = {
   important: { tone: "bad", text: "בעיה חשובה", help: "משהו בדף עלול למנוע ממנו להיכלל בגוגל או מפנה את Google לכתובת אחרת." },
-  check: { tone: "warn", text: "נקודה לבדיקה", help: "לא תקלה דחופה - פרט שכדאי לבדוק, כמו כותרת חסרה או דף שאף דף אחר באתר לא מקשר אליו." },
+  check: { tone: "warn", text: "נקודה לבדיקה", help: "לא תקלה דחופה - פרט שכדאי לבדוק, כמו כותרת חסרה או מידע מובנה פגום." },
   ok: { tone: "good", text: "נראה תקין", help: "לא נמצא בדף משהו שדורש טיפול. הערות קטנות, אם יש, מופיעות בפירוט." }
 };
 
 export function internalLinks(p: SeoPage): { tone: StatusTone; text: string } {
-  return p.links.inboundInternalCount > 0 ? { tone: "good", text: "יש" } : { tone: "warn", text: "אין קישורים" };
+  // Information only - never a warning colour (no inbound link ≠ a problem).
+  return p.links.inboundInternalCount > 0 ? { tone: "good", text: "יש" } : { tone: "neutral", text: "אין קישורים" };
 }
 
 export function pageLabel(p: SeoPage): { primary: string; path: string } {

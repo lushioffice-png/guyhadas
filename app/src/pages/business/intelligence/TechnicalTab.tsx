@@ -4,7 +4,7 @@ import { StatCard } from "../../../components/StatCard";
 import { Pager, usePagination } from "../../../components/ui/Pager";
 import { StatusPill } from "../../../components/ui/StatusPill";
 import { Disclosure } from "../../../components/ui/Disclosure";
-import { FINDING_TEXT, PRIORITY_DISPLAY, ROLE_LABELS, canonicalState, indexState, internalLinks, pageLabel, pagePriority, pagesCount, presenceState, structuredState, when } from "../../../lib/plainLanguage";
+import { FINDING_TEXT, INFO_ONLY, PRIORITY_DISPLAY, ROLE_LABELS, canonicalState, indexState, internalLinks, pageLabel, pagePriority, pagesCount, presenceState, structuredState, when } from "../../../lib/plainLanguage";
 import type { PagePriority } from "../../../lib/plainLanguage";
 import type { StatusTone } from "../../../components/ui/StatusPill";
 import type { SeoPage } from "../../../types";
@@ -60,6 +60,7 @@ function PageDetail({ p }: { p: SeoPage }) {
             <li key={d.code}>
               {FINDING_TEXT[d.code] || d.code}
               {d.basis === "inferred" ? " (הסקת מערכת)" : ""}
+              {INFO_ONLY.has(d.code) ? <span className="text-dim"> · לידיעה בלבד</span> : null}
             </li>
           ))}
         </ul>

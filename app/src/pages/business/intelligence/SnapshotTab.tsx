@@ -1,7 +1,7 @@
 import { StatCard } from "../../../components/StatCard";
 import { Disclosure } from "../../../components/ui/Disclosure";
 import { StatusPill } from "../../../components/ui/StatusPill";
-import { DECISION_TEXT, GEO_COPY, fmt, needsAttention, pagesCount, when } from "../../../lib/plainLanguage";
+import { DECISION_TEXT, GEO_COPY, fmt, needsReview, pagesCount, when } from "../../../lib/plainLanguage";
 import type { IntelligenceRun, SeoPage, TopicIntelligence } from "../../../types";
 
 // תמונת מצב - what was inspected, what was found, what matters now.
@@ -9,7 +9,7 @@ import type { IntelligenceRun, SeoPage, TopicIntelligence } from "../../../types
 export function SnapshotTab({ run, topics, pages, onOpen }: { run: IntelligenceRun; topics: TopicIntelligence[]; pages: SeoPage[]; onOpen: (tab: string) => void }) {
   const s = run.summary!;
   const current = pages.filter((p) => p.crawlStatus === "fetched");
-  const attention = current.filter(needsAttention);
+  const attention = current.filter(needsReview);
   const visible = topics.filter((t) => t.gscCurrent.status === "available" && (t.gscCurrent.impressions || 0) > 0);
   const notVisible = topics.length - visible.length;
   const nonIndexable = current.filter((p) => p.indexability.state === "non_indexable").length;
