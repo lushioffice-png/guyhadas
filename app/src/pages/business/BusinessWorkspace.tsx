@@ -4,20 +4,17 @@ import { AppShell } from "../../components/AppShell";
 import { listenBusinesses } from "../../lib/firestore";
 import type { Business } from "../../types";
 
+// Primary navigation = the real workflow (issue #23). Future modules
+// (competitors, content, experiments, reports) are not advertised here;
+// their placeholder routes still exist. Old URLs redirect (see App.tsx).
 const TABS: { to: string; label: string; end?: boolean }[] = [
-  { to: "", label: "סקירה כללית", end: true },
-  { to: "topics", label: "נושאים" },
+  { to: "", label: "סקירה", end: true },
   { to: "intelligence", label: "מודיעין חיפוש" },
-  { to: "search", label: "חיפוש" },
-  { to: "traffic", label: "תנועה" },
+  { to: "topics", label: "נושאי חיפוש" },
+  { to: "actions", label: "פעולות" },
+  { to: "measurement", label: "מדידה" },
   { to: "ai-visibility", label: "נראות AI" },
-  { to: "competitors", label: "מתחרים" },
-  { to: "opportunities", label: "הזדמנויות" },
-  { to: "content", label: "תוכן" },
-  { to: "tasks", label: "משימות" },
-  { to: "integrations", label: "אינטגרציות" },
-  { to: "experiments", label: "ניסויים" },
-  { to: "reports", label: "דוחות" }
+  { to: "settings", label: "הגדרות" }
 ];
 
 export interface BusinessContext {
@@ -43,13 +40,13 @@ export default function BusinessWorkspace() {
           </h1>
           {business && (
             <div className="app-main-subtitle">
-              Business {String(business.businessNumber).padStart(3, "0")} · {business.industry || "—"}
+              {business.industry || "—"}{business.website ? ` · ${business.website}` : ""}
             </div>
           )}
         </div>
       </div>
 
-      <nav className="workspace-tabs">
+      <nav className="workspace-tabs" aria-label="ניווט העסק">
         {TABS.map((tab) => (
           <NavLink
             key={tab.to}
