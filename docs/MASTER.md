@@ -1888,6 +1888,26 @@ M3.2 does NOT implement:
 
 Those remain future milestones.
 
+### M3.2 implementation status (PR #21, issue #20)
+
+**Status: IMPLEMENTED + TESTED. Live Hagar acceptance pending deploy. Live Semrush blocked by 0 API units (path covered by deterministic tests).** Details and decisions: `docs/M3.2_IMPLEMENTATION_NOTES.md`.
+
+Implemented:
+
+- Deterministic seed builder from confirmed Service Map items only; owner service areas first; website/AI places on fewer than 3 crawled pages reported as project locations, never seeded; rejected names/aliases never seed; caps round-robin by priority; full seed lineage.
+- Semrush as two governed operations (`discoverRelatedForSeed`, `discoverDomainOrganic`); the client sends only a seed key, the phrase is rebuilt server-side from the confirmed Service Map.
+- Raw queries keep per-source evidence (`sources.{gsc,semrush,manual}`), seed lineage and grouping reason; re-discovery refreshes evidence and never nulls another source's metrics.
+- Normalization: exact match first, then token overlap against the topic title with a place guard; no stemming.
+- Owner-rule exclusions stored with the rule (`excludedByRule`, raw query kept); re-found queries stay in their topic, so excluded topics stay excluded.
+- Lightweight explained qualification + preliminary intent on topics (not the §17 Search Intent object); discovery never changes owner status or creates pages/tasks/opportunities.
+- UI: seed list from the Service Map (no free-text seed box), skipped inputs with reasons, per-source badges and metrics, qualification reasons, excluded history, cache/paid/blocked decision shown.
+
+Acceptance (implementation brief §12): items 1–14, 16–18 covered by automated tests (`functions/test/searchUniverse.test.js`, `app/test/noProviderCallOnRender.test.ts`); 15 by the input contract below; 19 (browser on the real app) and the live parts of 1–5 pending deploy; 3–5 live Semrush blocked by quota; 20 verified by review.
+
+M3.2 → M4 input: `searchTopics` with status relevant / priority / brand_strategic, their `keywords` (per-source evidence, `seedRefs` to confirmed services/facets) and qualification reasons; negative signals = excluded topics + `keywords.excludedByRule`.
+
+Known limitations: Hebrew morphology not normalized (e.g. אדריכל / אדריכלות); the place guard knows only recorded places; English-only profile markets produce no geography seeds for Hebrew services (the UI asks for the Hebrew name). Google API governance gap: see §34 and §42.
+
 ---
 
 # 41. Future Milestones
