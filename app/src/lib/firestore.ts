@@ -29,7 +29,11 @@ import type {
   Competitor,
   BusinessService,
   ServiceOwnerStatus,
-  TaskPriority
+  TaskPriority,
+  TopicIntelligence,
+  SeoPage,
+  IntelligenceRun,
+  Baseline
 } from "../types";
 
 // How much history the Traffic/Search trend charts load. Milestone 3's
@@ -429,4 +433,27 @@ export async function addManualCompetitor(businessId: string, domain: string) {
 
 export async function deleteCompetitor(id: string) {
   return deleteDoc(doc(db, "competitors", id));
+}
+
+// --- M4 Search Intelligence & Baseline (read-only; written by Cloud Functions) ---
+
+function byBusiness<T>(name: string, businessId: string, cb: (rows: T[]) => void): Unsubscribe {
+  const q = query(collection(db, name), where("businessId", "==", businessId));
+  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...(d.data() as object) }) as T)));
+}
+
+export function listenTopicIntelligence(businessId: string, cb: (items: TopicIntelligence[]) => void): Unsubscribe {
+  return byBusiness<TopicIntelligence>("topicIntelligence", businessId, (rows) => cb(rows.filter((r) => !r.superseded).sort((a, b) => (b.gscCurrent?.impressions || 0) - (a.gscCurrent?.impressions || 0) || a.title.localeCompare(b.title))));
+}
+
+export function listenSeoPages(businessId: string, cb: (items: SeoPage[]) => void): Unsubscribe {
+  return byBusiness<SeoPage>("seoPages", businessId, (rows) => cb(rows.sort((a, b) => a.url.localeCompare(b.url))));
+}
+
+export function listenLatestIntelligenceRun(businessId: string, cb: (run: IntelligenceRun | null) => void): Unsubscribe {
+  return byBusiness<IntelligenceRun>("intelligenceRuns", businessId, (rows) => cb(rows.filter((r) => r.status === "completed").sort((a, b) => (b.completedAtMs || 0) - (a.completedAtMs || 0))[0] || null));
+}
+
+export function listenBaselines(businessId: string, cb: (items: Baseline[]) => void): Unsubscribe {
+  return byBusiness<Baseline>("baselines", businessId, (rows) => cb(rows.sort((a, b) => b.version - a.version)));
 }

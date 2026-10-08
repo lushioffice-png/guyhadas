@@ -197,3 +197,31 @@ export function analyzeBusiness(businessId: string): Promise<AnalyzeBusinessResu
 export function analyzeBusinessNewPaidRun(businessId: string): Promise<AnalyzeBusinessResult> {
   return callFunction<AnalyzeBusinessResult>("visibilityAnalyzeBusiness", { businessId, forceRefresh: true });
 }
+
+// --- M4 Search Intelligence & Baseline (functions/searchIntelligence.js) ---
+// Button-triggered only. The run crawls the business's own site and makes one
+// governed Search Console request (cached; quota-limited; no $ cost). No
+// Semrush, GA4 or LLM call.
+
+export interface IntelligenceRunResult {
+  runId: string;
+  summary: Record<string, unknown>;
+  gsc: { status: string; decision: string | null; cacheHit: boolean; providerCalled: boolean; reason: string | null; blockedReason: string | null };
+  crawl: { status: string; reason: string | null };
+}
+
+export function runSearchIntelligence(businessId: string): Promise<IntelligenceRunResult> {
+  return callFunction<IntelligenceRunResult>("visibilityRunSearchIntelligence", { businessId });
+}
+
+export interface CaptureBaselineResult {
+  baselineId: string;
+  version: number;
+  identicalToPrevious: boolean;
+  availability: Record<string, string>;
+}
+
+// Always creates a NEW immutable version - never updates an existing one.
+export function captureBaseline(businessId: string, note?: string): Promise<CaptureBaselineResult> {
+  return callFunction<CaptureBaselineResult>("visibilityCaptureBaseline", { businessId, note });
+}

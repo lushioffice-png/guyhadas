@@ -11,6 +11,7 @@ import BusinessTraffic from "./pages/business/BusinessTraffic";
 import BusinessSearch from "./pages/business/BusinessSearch";
 import BusinessTopics from "./pages/business/BusinessTopics";
 import ComingNext from "./pages/business/ComingNext";
+import BusinessIntelligence from "./pages/business/BusinessIntelligence";
 
 export default function App() {
   return (
@@ -25,6 +26,7 @@ export default function App() {
       >
         <Route index element={<BusinessOverview />} />
         <Route path="topics" element={<BusinessTopics />} />
+        <Route path="intelligence" element={<BusinessIntelligence />} />
         <Route path="tasks" element={<BusinessTasks />} />
         <Route path="opportunities" element={<BusinessOpportunities />} />
         <Route path="integrations" element={<BusinessIntegrations />} />
@@ -32,7 +34,7 @@ export default function App() {
         <Route path="traffic" element={<BusinessTraffic />} />
         <Route
           path="ai-visibility"
-          element={<ComingNext title="נראות AI" description="מנוע הניטור האוטומטי של נראות AI מתוכנן לשלב מאוחר יותר." />}
+          element={<ComingNext title="נראות AI" description="ניטור נראות בפועל במנועי AI (ChatGPT, Gemini, Perplexity ועוד) מתוכנן לשלב מאוחר יותר. מוכנות GEO של האתר עצמו - קריאות העסק למכונה - מוצגת בלשונית מודיעין חיפוש." />}
         />
         <Route
           path="competitors"

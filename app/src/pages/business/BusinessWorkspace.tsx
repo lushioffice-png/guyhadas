@@ -7,6 +7,7 @@ import type { Business } from "../../types";
 const TABS: { to: string; label: string; end?: boolean }[] = [
   { to: "", label: "סקירה כללית", end: true },
   { to: "topics", label: "נושאים" },
+  { to: "intelligence", label: "מודיעין חיפוש" },
   { to: "search", label: "חיפוש" },
   { to: "traffic", label: "תנועה" },
   { to: "ai-visibility", label: "נראות AI" },
