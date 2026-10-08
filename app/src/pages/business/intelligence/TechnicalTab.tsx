@@ -13,7 +13,7 @@ type Filter = "all" | "attention" | "not_indexable" | "not_in_sitemap" | "not_cr
 const FILTERS: { id: Filter; label: string }[] = [
   { id: "all", label: "הכל" },
   { id: "attention", label: "דורשים תשומת לב" },
-  { id: "not_indexable", label: "לא נכנסים לגוגל" },
+  { id: "not_indexable", label: "לא יכולים להיכלל בגוגל" },
   { id: "not_in_sitemap", label: "לא במפת האתר" },
   { id: "not_crawled", label: "לא נבדקו בריצה האחרונה" }
 ];
@@ -22,6 +22,13 @@ function PageDetail({ p }: { p: SeoPage }) {
   const findings = p.diagnostics;
   return (
     <div className="row-detail">
+      <div className="detail-note" style={{ marginTop: 0, marginBottom: 8 }}>
+        {p.indexability.state === "indexable"
+          ? "לפי הסריקה, אין בדף מניעה טכנית להיכלל בגוגל. זה לא אומר ש-Google כבר כלל אותו בפועל."
+          : p.indexability.state === "non_indexable"
+            ? "לפי הסריקה, יש בדף מניעה טכנית שבגללה הוא לא יכול להיכלל בגוגל."
+            : "לא ניתן היה לקבוע מהסריקה אם הדף יכול להיכלל בגוגל."}
+      </div>
       <div className="detail-label">מה נמצא בדף</div>
       {findings.length ? (
         <ul className="plain-list">
@@ -85,10 +92,10 @@ export function TechnicalTab({ pages }: { pages: SeoPage[] }) {
   const count = (fn: (p: SeoPage) => boolean) => current.filter(fn).length;
   return (
     <div>
-      <p className="tab-intro">הבדיקה הטכנית של דפי האתר: האם Google יכול להכניס אותם לאינדקס, האם הם מוגדרים נכון, ואיך הם מקושרים זה לזה.</p>
+      <p className="tab-intro">הבדיקה הטכנית של דפי האתר: האם לפי הסריקה אין מניעה טכנית שהדפים ייכללו בגוגל, האם הם מוגדרים נכון, ואיך הם מקושרים זה לזה. זו לא בדיקה של אילו דפים Google כבר כלל בפועל.</p>
       <div className="stat-grid">
         <StatCard label="דפים שנבדקו" value={current.length} />
-        <StatCard label="יכולים להופיע בגוגל" value={`${count((p) => p.indexability.state === "indexable")}/${current.length}`} />
+        <StatCard label="יכולים להיכלל בגוגל (לפי הסריקה)" value={`${count((p) => p.indexability.state === "indexable")}/${current.length}`} />
         <StatCard label="דורשים תשומת לב" value={count(needsAttention)} />
         <StatCard label="עם מידע למנועי חיפוש" value={`${count((p) => p.structuredData.state === "present")}/${current.length}`} />
       </div>
@@ -113,7 +120,7 @@ export function TechnicalTab({ pages }: { pages: SeoPage[] }) {
               <tr>
                 <th>דף</th>
                 <th>סוג</th>
-                <th title="האם Google יכול להכניס את הדף לאינדקס">נכנס לגוגל</th>
+                <th title="לפי הסריקה שלנו: האם אין בדף מניעה טכנית (כמו הוראה שמבקשת ממנועי חיפוש לא לכלול את הדף) שתמנע מ-Google לכלול אותו. לא נבדק אם Google כבר כלל את הדף בפועל.">יכול להיכלל בגוגל</th>
                 <th title="כתובת הדף הראשית ש-Google אמור להכיר בה">כתובת ראשית</th>
                 <th>במפת האתר</th>
                 <th title="מידע שעוזר למנועי חיפוש להבין את הדף">מידע למנועי חיפוש</th>
@@ -165,7 +172,7 @@ export function TechnicalTab({ pages }: { pages: SeoPage[] }) {
       )}
       <Pager {...pager} />
       <p className="text-dim footnote">
-        הבדיקה מבוססת על סריקת האתר (עד 50 דפים). מצב האינדקס בגוגל עצמו לא נבדק, וקישורים נספרים רק בין הדפים שנבדקו.
+        הבדיקה מבוססת על סריקת האתר (עד 50 דפים). ״יכול להיכלל בגוגל״ מתאר רק אם אין מניעה טכנית לפי הסריקה - לא בדקנו אם Google כבר כלל את הדף בפועל. קישורים נספרים רק בין הדפים שנבדקו.
       </p>
     </div>
   );

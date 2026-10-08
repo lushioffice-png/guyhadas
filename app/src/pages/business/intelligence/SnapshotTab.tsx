@@ -20,7 +20,7 @@ export function SnapshotTab({ run, topics, pages, onOpen }: { run: IntelligenceR
   if (s.approvedTopics === 0) findings.push({ tone: "warn", text: "אין עדיין נושאי חיפוש מאושרים - אשר/י נושאים בלשונית נושאי חיפוש כדי שהמערכת תוכל לנתח אותם.", tab: "topics" });
   else if (notVisible > 0) findings.push({ tone: "warn", text: notVisible === 1 ? `נושא אחד מתוך ${topics.length} שאישרת עדיין לא מופיע בגוגל.` : `${notVisible} מתוך ${topics.length} הנושאים שאישרת עדיין לא מופיעים בגוגל.`, tab: "topics" });
   else findings.push({ tone: "good", text: `כל ${topics.length} הנושאים שאישרת כבר מופיעים בגוגל.`, tab: "topics" });
-  if (nonIndexable > 0) findings.push({ tone: "bad", text: nonIndexable === 1 ? "דף אחד באתר לא אמור להופיע בגוגל." : `${nonIndexable} דפים באתר לא אמורים להופיע בגוגל.`, tab: "technical" });
+  if (nonIndexable > 0) findings.push({ tone: "bad", text: nonIndexable === 1 ? "לפי הסריקה, דף אחד באתר לא יכול להיכלל בגוגל." : `לפי הסריקה, ${nonIndexable} דפים באתר לא יכולים להיכלל בגוגל.`, tab: "technical" });
   if (attention.length > 0) findings.push({ tone: "warn", text: attention.length === 1 ? "דף אחד דורש תשומת לב טכנית." : `${pagesCount(attention.length)} דורשים תשומת לב טכנית.`, tab: "technical" });
   else if (current.length) findings.push({ tone: "good", text: "לא נמצאו בעיות טכניות משמעותיות בדפים שנבדקו.", tab: "technical" });
   if (geoGaps.length) findings.push({ tone: "warn", text: `${geoGaps.length} מתוך ${run.geoReadiness!.signals.length} הבדיקות של בהירות העסק באתר דורשות שיפור (למשל: ${GEO_COPY[geoGaps[0].key]?.title || geoGaps[0].key}).`, tab: "geo" });

@@ -54,7 +54,7 @@ export const ROLE_LABELS: Record<string, string> = {
 
 // One plain sentence per technical finding, for the row details.
 export const FINDING_TEXT: Record<string, string> = {
-  non_indexable: "Google לא אמור להכניס את הדף לאינדקס",
+  non_indexable: "יש בדף מניעה טכנית (למשל הוראה בדף שמבקשת ממנועי חיפוש לא לכלול אותו, או הפניה לכתובת ראשית של דף אחר) שבגללה הוא לא יכול להיכלל בגוגל",
   canonical_missing: "לא מוגדרת לדף כתובת ראשית",
   canonical_conflicting: "הוגדרו לדף כמה כתובות ראשיות שונות",
   canonical_points_elsewhere: "הדף מפנה את Google לכתובת ראשית של דף אחר",
