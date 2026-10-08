@@ -2,7 +2,8 @@ import type { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 
-export function AppShell({ children }: { children: ReactNode }) {
+// `wide`: analytics workspaces use more of a desktop screen (issue #23).
+export function AppShell({ children, wide = false }: { children: ReactNode; wide?: boolean }) {
   const { user, signOut } = useAuth();
 
   return (
@@ -30,7 +31,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </aside>
 
       <main className="app-main">
-        <div className="app-main-inner">{children}</div>
+        <div className={`app-main-inner${wide ? " wide" : ""}`}>{children}</div>
       </main>
     </div>
   );

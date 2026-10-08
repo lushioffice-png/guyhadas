@@ -1113,3 +1113,36 @@
   .finding { flex-wrap: wrap; }
   .page-head .btn-primary { width: 100%; }
 }
+
+/* --- Technical SEO priority pass (issue #23 follow-up) --- */
+.app-main-inner.wide { max-width: 1440px; }
+
+.seo-table td { padding: 14px var(--space-4); }
+.seo-table th { padding: 10px var(--space-4); }
+.seo-table .cell-page { min-width: 260px; max-width: 420px; }
+.seo-table .cell-secondary { margin-top: 2px; }
+.signal-ok { color: var(--color-accent); font-size: 0.85rem; font-weight: 600; white-space: nowrap; }
+.signal-muted { color: var(--color-text-dim); font-size: 0.85rem; white-space: nowrap; }
+.detail-status { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; font-size: 0.88rem; margin-bottom: var(--space-3); }
+.priority-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-3);
+}
+.priority-legend > span { display: inline-flex; align-items: center; gap: 6px; }
+
+@media (max-width: 760px) {
+  .seo-table td, .seo-table th { padding: 12px; }
+  .seo-table .disclosure { min-height: 40px; }
+}
+/* Visually-hidden header text is absolutely positioned; without a
+   positioned ancestor it escaped the table's scroll container and made the
+   whole page scroll sideways on phones. */
+.data-table-wrap { position: relative; }
+.signal-secondary { font-size: 0.84rem; color: var(--color-text-dim); white-space: nowrap; }
+.signal-secondary.warn { color: var(--color-warn); }
+.signal-secondary.bad { color: #F87171; }
+.seo-table th:nth-child(n+5) { color: var(--color-text-dim); font-weight: 600; }
