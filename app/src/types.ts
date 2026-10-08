@@ -220,8 +220,91 @@ export interface SearchTopic {
   source: DiscoverySource;
   addedBy: "system" | "owner";
   notes?: string;
+  // M3.2 (additive; absent on topics created before it) - lineage and
+  // lightweight, explained qualification. Never an owner decision.
+  sources?: DiscoverySource[];
+  sourceCount?: number;
+  seedRefs?: SeedRef[];
+  qualification?: TopicQualification;
+  qualificationReasons?: QualificationReason[];
+  preliminaryIntent?: PreliminaryIntent;
+  lastDiscoveredAt?: unknown;
   createdAt: unknown;
   updatedAt: unknown;
+}
+
+export type TopicQualification = "likely_relevant" | "needs_review" | "possible_mismatch";
+export type PreliminaryIntent = "commercial" | "informational" | "navigational" | "local" | "unclassified";
+export type QualificationReasonCode =
+  | "matches_confirmed_service"
+  | "matches_owner_geography"
+  | "matches_brand_term"
+  | "matches_strategic_priority"
+  | "matches_rejected_service"
+  | "commercial_modifier"
+  | "informational_modifier"
+  | "no_confirmed_service_match";
+export interface QualificationReason {
+  code: QualificationReasonCode;
+  detail: string | null;
+}
+
+// Lineage of a discovered query/topic back to the confirmed Service Map.
+export interface SeedComponent {
+  dimension: FacetDimension;
+  value: string;
+  provenance: FacetProvenance;
+}
+export interface SeedRef {
+  seedKey: string;
+  phrase: string;
+  kind: SeedKind;
+  serviceId: string;
+  serviceName: string;
+  components: SeedComponent[];
+}
+export type SeedKind = "service" | "service_geo" | "service_term" | "service_modifier";
+export interface SearchSeed extends SeedRef {
+  serviceIds: string[];
+  servicePriority: TaskPriority;
+  explanation: string;
+  components: (SeedComponent & { origin: string; sourceUrl: string | null; pageCount: number | null })[];
+}
+export type SeedSkipReason =
+  | "project_location_signal"
+  | "script_mismatch"
+  | "geo_cap"
+  | "owner_exclusion_rule"
+  | "matches_rejected_service"
+  | "unverified_ai_inference";
+export interface SkippedSeedInput {
+  serviceId: string;
+  serviceName: string;
+  dimension: FacetDimension;
+  value: string;
+  provenance: FacetProvenance | null;
+  reason: SeedSkipReason;
+  rule?: string;
+  pageCount?: number;
+}
+export interface SeedBuildResult {
+  seeds: SearchSeed[];
+  skipped: SkippedSeedInput[];
+  droppedByCap: number;
+  inputs: { confirmedServiceCount: number; rejectedServiceCount: number; ownerGeographies: string[] };
+}
+
+export interface KeywordSourceEvidence {
+  sourceProperty?: string;
+  report?: string;
+  volume?: number;
+  difficulty?: number;
+  competition?: number;
+  position?: number;
+  url?: string;
+  metrics?: { impressions?: number; clicks?: number; position?: number };
+  timesSeen?: number;
+  legacy?: boolean;
 }
 
 // One row per raw discovered phrase, independent of topic grouping - this
@@ -239,6 +322,14 @@ export interface Keyword {
   volume?: number | null;
   difficulty?: number | null;
   metrics?: { impressions?: number; clicks?: number; position?: number } | null;
+  // M3.2: evidence per discovery source (never overwritten by another
+  // source), seed lineage, how it was grouped, and - when an owner rule
+  // excluded it - which rule (topicId is then null).
+  sources?: Partial<Record<DiscoverySource, KeywordSourceEvidence>>;
+  sourceList?: DiscoverySource[];
+  seedRefs?: SeedRef[];
+  grouping?: { rule: "exact" | "title_token_overlap" | "new_topic" | "existing_keyword"; score: number | null; topicTitle: string } | null;
+  excludedByRule?: { ruleId: string; rule: string; reason: "owner_exclusion_rule" } | null;
   discoveredAt: unknown;
 }
 
@@ -271,8 +362,8 @@ export const KNOWLEDGE_TYPE_LABELS: Record<KnowledgeType, string> = {
 };
 
 export const DISCOVERY_SOURCE_LABELS: Record<DiscoverySource, string> = {
-  semrush: "Semrush",
-  gsc: "Search Console",
+  semrush: "Semrush · ביקוש שוק",
+  gsc: "Search Console · נראות קיימת",
   website: "סריקת אתר (מושבת)",
   competitor: "מתחרה",
   manual: "ידני"
@@ -445,3 +536,45 @@ export interface BusinessAnalysisRun {
   costControl?: CostControlDecision; // absent on runs recorded before 2026-10-07 fix
   status?: "completed" | "blocked" | "ai_error";
 }
+
+// --- M3.2 labels ---
+export const QUALIFICATION_LABELS: Record<TopicQualification, string> = {
+  likely_relevant: "תואם שירות מאושר",
+  needs_review: "לבדיקה",
+  possible_mismatch: "ייתכן שלא רלוונטי"
+};
+
+export const INTENT_LABELS: Record<PreliminaryIntent, string> = {
+  commercial: "מסחרי",
+  informational: "מידע",
+  navigational: "מותג",
+  local: "מקומי",
+  unclassified: "לא סווג"
+};
+
+export const QUALIFICATION_REASON_LABELS: Record<QualificationReasonCode, string> = {
+  matches_confirmed_service: "תואם שירות מאושר",
+  matches_owner_geography: "כולל אזור שירות שהגדרת",
+  matches_brand_term: "כולל מונח מותג",
+  matches_strategic_priority: "תואם עדיפות אסטרטגית",
+  matches_rejected_service: "דומה לפריט שדחית",
+  commercial_modifier: "מילה מסחרית",
+  informational_modifier: "מילת מידע/שאלה",
+  no_confirmed_service_match: "לא נמצא שירות מאושר תואם"
+};
+
+export const SEED_KIND_LABELS: Record<SeedKind, string> = {
+  service: "שירות",
+  service_geo: "שירות × אזור",
+  service_term: "מונח שירות",
+  service_modifier: "שירות × מאפיין"
+};
+
+export const SEED_SKIP_REASON_LABELS: Record<SeedSkipReason, string> = {
+  project_location_signal: "מיקום של פרויקט (לא אזור שירות)",
+  script_mismatch: "שפה/כתב שונים משם השירות",
+  geo_cap: "מעבר למכסת האזורים לשירות",
+  owner_exclusion_rule: "כלל החרגה שלך",
+  matches_rejected_service: "תואם פריט שדחית",
+  unverified_ai_inference: "פרשנות AI לא מאומתת"
+};

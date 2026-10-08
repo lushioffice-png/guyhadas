@@ -361,6 +361,8 @@ export async function createManualTopic(businessId: string, title: string, notes
     queries: [title],
     status: "relevant",
     source: "manual",
+    sources: ["manual"],
+    sourceCount: 1,
     addedBy: "owner",
     notes: notes || "",
     createdAt: serverTimestamp(),
@@ -375,6 +377,11 @@ export async function createManualTopic(businessId: string, title: string, notes
     volume: null,
     difficulty: null,
     metrics: null,
+    sources: { manual: { report: "owner_added" } },
+    sourceList: ["manual"],
+    seedRefs: [],
+    grouping: { rule: "new_topic", score: null, topicTitle: title },
+    excludedByRule: null,
     discoveredAt: serverTimestamp()
   });
   return topicRef;
@@ -384,6 +391,19 @@ export function listenKeywordsForTopic(topicId: string, cb: (keywords: Keyword[]
   const q = query(collection(db, "keywords"), where("topicId", "==", topicId));
   return onSnapshot(q, (snap) => {
     cb(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Keyword, "id">) })));
+  });
+}
+
+// Raw queries an owner exclusion rule kept out of review (topicId null,
+// excludedByRule set) - shown as historical negative signals.
+export function listenRuleExcludedKeywords(businessId: string, cb: (keywords: Keyword[]) => void): Unsubscribe {
+  const q = query(collection(db, "keywords"), where("businessId", "==", businessId), where("topicId", "==", null));
+  return onSnapshot(q, (snap) => {
+    cb(
+      snap.docs
+        .map((d) => ({ id: d.id, ...(d.data() as Omit<Keyword, "id">) }))
+        .filter((k) => !!k.excludedByRule)
+    );
   });
 }
 
