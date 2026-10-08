@@ -96,8 +96,9 @@ async function fetchPage(url, timeoutMs = FETCH_TIMEOUT_MS) {
     const res = await fetch(url, { signal: controller.signal, headers: { "User-Agent": USER_AGENT } });
     if (!res.ok) return { ok: false, status: res.status, html: null, finalUrl: res.url, error: `HTTP ${res.status}` };
     const contentType = res.headers.get("content-type") || "";
+    const xRobotsTag = res.headers.get("x-robots-tag") || null;
     const html = await res.text();
-    return { ok: true, status: res.status, html, finalUrl: res.url || url, contentType, error: null };
+    return { ok: true, status: res.status, html, finalUrl: res.url || url, contentType, xRobotsTag, error: null };
   } catch (err) {
     return { ok: false, status: null, html: null, finalUrl: url, error: err.name === "AbortError" ? "timeout" : err.message };
   } finally {
@@ -167,12 +168,12 @@ async function crawlSite(websiteUrl, cheerio, maxPages = MAX_PAGES) {
   };
   const startUrl = canonicalUrl(/^https?:\/\//i.test(websiteUrl) ? websiteUrl : `https://${websiteUrl}`);
   report.startUrl = startUrl;
-  if (!startUrl) return { pages: [], report };
+  if (!startUrl) return { pages: [], report, sitemapPageKeys: [], origin: null, sitemapRead: false };
 
   const home = await fetchPage(startUrl);
   if (!home.ok) {
     report.failed.push({ url: startUrl, reason: home.error });
-    return { pages: [], report };
+    return { pages: [], report, sitemapPageKeys: [], origin: null, sitemapRead: false };
   }
   // Follow the site's own redirect (e.g. hagarlushi.com -> www.hagarlushi.com)
   // so every later URL is built on the host the site actually serves.
@@ -198,6 +199,8 @@ async function crawlSite(websiteUrl, cheerio, maxPages = MAX_PAGES) {
   });
   const sitemap = await readSitemapPages(origin, cheerio, isSameSite);
   report.sitemap = sitemap.note;
+  // M4: which pages the sitemap lists (pageKey form), for sitemap membership.
+  const sitemapPageKeys = sitemap.pages.map((raw) => canonicalUrl(raw)).filter(Boolean).map(pageKey);
   for (const raw of sitemap.pages) {
     const url = canonicalUrl(raw);
     if (url) candidates.push({ url, via: "sitemap" });
@@ -244,10 +247,12 @@ async function crawlSite(websiteUrl, cheerio, maxPages = MAX_PAGES) {
       report.failed.push({ url, reason: `not HTML (${result.contentType})` });
       continue;
     }
-    pages.push({ url, html: result.html });
+    // status/finalUrl/xRobotsTag are additive (M4 page inventory); M3.1
+    // callers only read url + html.
+    pages.push({ url, html: result.html, status: result.status, finalUrl: result.finalUrl ? canonicalUrl(result.finalUrl) : url, xRobotsTag: result.xRobotsTag || null });
   }
   report.pagesFetched = pages.length;
-  return { pages, report };
+  return { pages, report, sitemapPageKeys, origin, sitemapRead: !/^sitemap\.xml: /.test(report.sitemap || "") };
 }
 
 module.exports = {
@@ -256,6 +261,8 @@ module.exports = {
   fetchPage,
   crawlSite,
   canonicalUrl,
+  pageKey,
+  bareHost,
   MAX_PAGES,
   FETCH_TIMEOUT_MS
 };

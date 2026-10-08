@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { EmptyState } from "../../components/EmptyState";
-import { updateBusiness } from "../../lib/firestore";
+import { captureBaseline } from "../../lib/functions";
 import type { BusinessContext } from "./BusinessWorkspace";
 
 export default function BusinessOverview() {
@@ -29,8 +29,10 @@ export default function BusinessOverview() {
     setSettingBaseline(true);
     setBaselineError(null);
     try {
-      const today = new Date().toISOString().slice(0, 10);
-      await updateBusiness(business!.id, { baselineDate: today });
+      // M4: a baseline is an immutable, versioned snapshot - this creates a
+      // NEW version and never edits an earlier one. baselineDate (used by the
+      // Traffic/Search charts) is set server-side to point at it.
+      await captureBaseline(business!.id);
     } catch (err) {
       setBaselineError(err instanceof Error ? err.message : "שגיאה בקביעת הבייסליין");
     } finally {
@@ -60,13 +62,13 @@ export default function BusinessOverview() {
         <h2 className="section-title">בייסליין</h2>
         {baselineError && <div className="login-error">{baselineError}</div>}
         <p className="text-muted" style={{ marginBottom: 12, fontSize: "0.88rem" }}>
-          תאריך הבייסליין הוא נקודת הייחוס להשוואות בלשוניות תנועה וחיפוש - הנתון הקרוב ביותר לתאריך זה משמש כבסיס
-          ל"שינוי מאז הבייסליין".
+          בייסליין הוא צילום מצב שלא משתנה לעולם. שמירה נוספת יוצרת גרסה חדשה, והקודמות נשמרות. תאריך הבייסליין האחרון
+          משמש כנקודת הייחוס להשוואות בלשוניות תנועה וחיפוש; הפירוט המלא בלשונית מודיעין חיפוש.
           {" "}
-          {business.baselineDate ? `נקבע ל-${business.baselineDate}.` : "טרם נקבע."}
+          {business.baselineDate ? `האחרון נשמר ב-${business.baselineDate}.` : "טרם נשמר."}
         </p>
         <button type="button" className="btn btn-outline" disabled={settingBaseline} onClick={handleSetBaseline}>
-          {settingBaseline ? "קובע…" : business.baselineDate ? "עדכן בייסליין להיום" : "קבע בייסליין להיום"}
+          {settingBaseline ? "שומר…" : business.baselineDate ? "שמירת גרסת בייסליין חדשה" : "שמירת בייסליין ראשון"}
         </button>
       </div>
 

@@ -20,7 +20,8 @@ export interface Business {
   primaryConversionGoals?: string;
   status: BusinessStatus;
   createdAt: unknown; // Firestore Timestamp
-  baselineDate?: string | null; // ISO date string, set when a baseline is created (Milestone 3)
+  baselineDate?: string | null; // ISO date of the latest immutable baseline (M4 sets it server-side; pointer only)
+  latestBaselineId?: string | null; // baselines/{id} - the immutable snapshot (M4)
 }
 
 export type IntegrationProvider = "ga4" | "search_console" | "semrush" | "openai" | "anthropic" | "xai" | "n8n";
@@ -577,4 +578,187 @@ export const SEED_SKIP_REASON_LABELS: Record<SeedSkipReason, string> = {
   owner_exclusion_rule: "כלל החרגה שלך",
   matches_rejected_service: "תואם פריט שדחית",
   unverified_ai_inference: "פרשנות AI לא מאומתת"
+};
+
+// --- M4 Search Intelligence & Baseline (functions/searchIntelligenceStore.js) ---
+// Read-only for the client (firestore.rules). Shapes are documented in
+// docs/M4_IMPLEMENTATION_BRIEF.md; every block carries status/basis so
+// observed facts, inferences and missing data stay distinguishable.
+
+export type Availability = "available" | "not_available" | "no_observation";
+export type Basis = "observed" | "inferred" | "unknown";
+
+export interface Diagnostic {
+  code: string;
+  detail: string | null;
+  basis: Basis;
+}
+
+export interface SeoPage {
+  id: string;
+  businessId: string;
+  url: string;
+  pageKey: string;
+  httpStatus: number | null;
+  title: string | null;
+  metaDescription: string | null;
+  h1: string[];
+  wordCount: number | null;
+  indexability: { state: "indexable" | "non_indexable" | "unknown"; reasons: string[]; scope?: string };
+  canonical: { state: "valid" | "missing" | "conflicting" | "points_elsewhere" | "unknown"; target: string | null };
+  robots: { state: "crawlable" | "blocked" | "unknown"; rule?: string | null; reason?: string };
+  sitemap: { state: "present" | "absent" | "unknown"; reason?: string };
+  structuredData: { state: "present" | "missing" | "invalid"; types: string[] };
+  links: { inboundInternalCount: number; outboundInternalCount: number; externalCount: number; scope: string };
+  orphan: { state: string; scope?: string };
+  role: { role: string; basis: Basis; rule: string };
+  diagnostics: Diagnostic[];
+  crawlStatus: "fetched" | "failed_last_run" | "not_crawled_last_run";
+  lastRunReason?: string;
+  lastCrawledAtMs: number;
+}
+
+export interface GscQueryRow {
+  query: string;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+  position: number | null;
+  pageCount: number;
+}
+
+export interface TopicIntelligence {
+  id: string;
+  topicId: string;
+  businessId: string;
+  title: string;
+  ownerStatus: TopicStatus;
+  queryCount: number;
+  queries: string[];
+  sourceMix: Record<string, number>;
+  gscCurrent: {
+    status: Availability;
+    reason?: string;
+    note?: string;
+    period?: { startDate: string; endDate: string };
+    impressions?: number;
+    clicks?: number;
+    ctr?: number;
+    avgPosition?: number | null;
+    queriesWithImpressions?: number;
+    rankingDistribution?: Record<string, number>;
+    queries?: GscQueryRow[];
+    pages?: { url: string; pageKey: string; impressions: number; clicks: number; position: number | null; crawled: boolean }[];
+    multiplePagesObserved?: boolean;
+  };
+  gscDiscovery: { status: Availability; reason?: string; window?: string; queriesObserved?: number; impressions?: number; clicks?: number };
+  semrush: { status: Availability; reason?: string; totalMonthlyVolume?: number; maxDifficulty?: number | null; queriesWithVolume?: number; note?: string };
+  pages: { observed: { url: string; pageKey: string; impressions: number; clicks: number; position: number | null }[]; contentMatched: { url: string; pageKey: string; rule: string }[] };
+  technical: { pageKey: string; url: string; indexability: string; canonical: string; sitemap: string; structuredData: string; diagnostics: string[] }[];
+  business: {
+    linkedServices: { serviceId: string | null; name: string; confirmed: boolean; basis: Basis }[];
+    geography: { value: string; provenance: string; basis: Basis }[];
+    preliminaryIntent: string | null;
+    commercialSignal: { present: boolean; basis: Basis };
+  };
+  serpContext: { status: Availability; reason?: string };
+  emergence: { newQueriesLast30Days: number | null; basis: Basis };
+  sourceConfidence: "high" | "medium" | "low";
+  missing: string[];
+  computedAtMs: number;
+  superseded?: boolean;
+}
+
+export interface GeoSignal {
+  key: string;
+  status: "present" | "partial" | "missing" | "unknown";
+  observation: string;
+  evidencePages: string[];
+  basis: Basis;
+}
+
+export interface IntelligenceRun {
+  id: string;
+  businessId: string;
+  status: "running" | "completed";
+  startedAtMs: number;
+  completedAtMs?: number;
+  inputs?: { approvedTopicIds: string[]; topicStatusCounts: Record<string, number> };
+  crawl?: { status: Availability; reason: string | null; report: (CrawlReport & { pagesAnalyzed?: number }) | null; robots: { available: boolean; reason: string | null; note: string | null } | null };
+  gsc?: { status: Availability; reason: string | null; blockedReason: string | null; decision: string | null; cacheHit: boolean; providerCalled: boolean; period: { startDate: string; endDate: string }; rowsReturned: number; possiblyTruncated: boolean };
+  businessContext?: {
+    searchConsole: { status: Availability; reason?: string; clicks?: number; impressions?: number; ctr?: number; avgPosition?: number; retrievedAtMs?: number | null };
+    traffic: { status: Availability; reason?: string; sessions?: number; organicSessions?: number | null; conversions?: number; retrievedAtMs?: number | null };
+    pageLevelTraffic: { status: Availability; reason?: string };
+  };
+  geoReadiness?: { signals: GeoSignal[]; summary: Record<string, number>; scope: string };
+  semrush?: { status: Availability; reason: string };
+  serpContext?: { status: Availability; reason: string };
+  summary?: {
+    approvedTopics: number;
+    topicsWithGscVisibility: number;
+    topicsWithSemrushDemand: number;
+    topicsWithAssociatedPage: number;
+    pagesAnalyzed: number;
+    pagesIndexable: number;
+    pagesNonIndexable: number;
+    pagesWithStructuredData: number;
+    pagesInSitemap: number;
+    diagnostics: Record<string, number>;
+  };
+}
+
+export interface Baseline {
+  id: string;
+  baselineId: string;
+  businessId: string;
+  version: number;
+  capturedAtMs: number;
+  capturedBy: string | null;
+  note: string | null;
+  sourceRunId: string | null;
+  identicalToPrevious: boolean;
+  contentHash: string;
+  topics: { topicId: string; title: string }[];
+  pages: { pageKey: string; url: string }[];
+  availability: Record<string, string>;
+  period: { gscQueryPage: { startDate: string; endDate: string } | null };
+}
+
+export const DIAGNOSTIC_LABELS: Record<string, string> = {
+  non_indexable: "לא ניתן לאינדוקס",
+  canonical_missing: "חסר קנוני",
+  canonical_conflicting: "קנוני סותר",
+  canonical_points_elsewhere: "קנוני מפנה לדף אחר",
+  blocked_by_robots: "חסום ב-robots.txt",
+  not_in_sitemap: "לא במפת האתר",
+  structured_data_missing: "אין נתונים מובנים",
+  structured_data_invalid: "נתונים מובנים לא תקינים",
+  title_missing: "חסרה כותרת",
+  title_duplicate: "כותרת כפולה",
+  meta_description_missing: "חסר תיאור",
+  meta_description_duplicate: "תיאור כפול",
+  h1_missing: "חסר H1",
+  h1_multiple: "כמה H1",
+  no_inbound_from_crawled_pages: "אין קישור פנימי אליו (בדפים שנסרקו)",
+  underlinked_candidate: "מקושר מדף אחד בלבד"
+};
+
+export const GEO_SIGNAL_LABELS: Record<string, string> = {
+  business_identity: "זהות העסק",
+  services_explicit: "שירותים מפורשים",
+  locations_explicit: "אזורי שירות מפורשים",
+  contact_details: "פרטי קשר",
+  structured_data_coverage: "כיסוי נתונים מובנים",
+  fact_consistency: "עקביות עובדות",
+  audience_positioning: "קהל ומיצוב"
+};
+
+export const MISSING_LABELS: Record<string, string> = {
+  gsc_current_not_available: "אין נתוני Search Console עדכניים לפי דף",
+  no_gsc_observation_for_topic: "אין חשיפות ב-Search Console לשאילתות הנושא",
+  semrush_demand_not_available: "אין נתוני ביקוש מ-Semrush",
+  no_associated_page: "לא נמצא דף משויך",
+  associated_page_not_in_crawl: "דף משויך לא נסרק",
+  serp_context_not_available: "אין נתוני SERP"
 };

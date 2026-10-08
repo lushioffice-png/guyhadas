@@ -150,6 +150,34 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // --- Search Intelligence & Baseline (roadmap M4) ---
+    // Derived intelligence, written only by visibilityRunSearchIntelligence /
+    // visibilityCaptureBaseline (functions/searchIntelligenceStore.js) via
+    // the Admin SDK. Read-only for clients: intelligence must come from
+    // real observations, never a client write.
+    match /seoPages/{pageId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /topicIntelligence/{intelId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /intelligenceRuns/{runId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // Baselines are IMMUTABLE (MASTER §38.5): no client write of any kind,
+    // and the server only ever creates a new version (create-only), never
+    // updates or deletes one.
+    match /baselines/{baselineId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
     // --- Universal External API Cost-Control Rule (permanent project
     // rule - see claude/visibility-os-api-cost-control-rule.md) ---
     // apiUsage is the ledger/cache every governed provider call
