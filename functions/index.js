@@ -12,6 +12,7 @@ const db = admin.firestore();
 Object.assign(exports, require("./visibility"));
 Object.assign(exports, require("./businessUnderstanding"));
 Object.assign(exports, require("./searchUniverse"));
+Object.assign(exports, require("./searchIntelligence"));
 
 const GUY_CALENDAR_EMAIL = "mr.hadas@gmail.com";
 

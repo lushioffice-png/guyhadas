@@ -81,5 +81,22 @@ module.exports = {
       circuitBreakerThreshold: 5,
       circuitBreakerCooldownMs: 15 * 60 * 1000
     }
+  },
+  google: {
+    // M4: Search Console query x page performance (which pages appear for
+    // which queries). The first Google call routed through the governor
+    // (MASTER §34). No $ cost - Google quota - so limits are on request
+    // counts; actualCostUsd is recorded as 0.
+    searchConsoleQueryPage: {
+      maxRequestsPerBusinessPerDay: 10,
+      maxRequestsPerBusinessPerMonth: 120,
+      maxRequestsGlobalPerDay: 100,
+      maxRequestsGlobalPerMonth: 2000,
+      // The analysis period ends 3 days ago and moves daily, so the input
+      // (and cache identity) changes once a day; within a day, re-runs reuse.
+      cacheTtlMs: 12 * 60 * 60 * 1000,
+      circuitBreakerThreshold: 5,
+      circuitBreakerCooldownMs: 15 * 60 * 1000
+    }
   }
 };
