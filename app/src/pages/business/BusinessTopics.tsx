@@ -37,8 +37,6 @@ import { SeedDiscoveryPanel } from "./topics/SeedDiscoveryPanel";
 const REVIEW_STATUSES: TopicStatus[] = ["new", "unsure"];
 const APPROVED_STATUSES: TopicStatus[] = ["relevant", "priority", "brand_strategic"];
 
-const PIPELINE = ["העסק", "הבנת העסק", "מפת שירותים", "יקום חיפוש", "SEO + GEO", "הזדמנויות", "משימות", "מדידה", "למידה"];
-const CURRENT_STEPS = new Set(["מפת שירותים", "יקום חיפוש"]);
 
 function formatDate(value: unknown): string {
   const ts = value as { toDate?: () => Date } | null | undefined;
@@ -129,16 +127,6 @@ export default function BusinessTopics() {
         קודם המערכת מבינה מה העסק מוכר (מפת שירותים), ורק אחר כך מחפשת מה אנשים מחפשים סביב זה (יקום חיפוש). כל דבר
         שהמערכת מגלה ממתין לאישורך.
       </p>
-      <nav className="pipeline" aria-label="שלבי המערכת">
-        {PIPELINE.map((step, i) => (
-          <span key={step} style={{ display: "contents" }}>
-            {i > 0 && <span className="pipeline-arrow" aria-hidden="true">←</span>}
-            <span className={`pipeline-step ${CURRENT_STEPS.has(step) ? "current" : ""}`} aria-current={CURRENT_STEPS.has(step) ? "step" : undefined}>
-              {step}
-            </span>
-          </span>
-        ))}
-      </nav>
 
       <ServiceMapSection business={business} services={services} />
 

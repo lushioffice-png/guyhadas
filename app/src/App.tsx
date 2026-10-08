@@ -4,11 +4,10 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import BusinessWorkspace from "./pages/business/BusinessWorkspace";
 import BusinessOverview from "./pages/business/BusinessOverview";
-import BusinessTasks from "./pages/business/BusinessTasks";
-import BusinessOpportunities from "./pages/business/BusinessOpportunities";
-import BusinessIntegrations from "./pages/business/BusinessIntegrations";
-import BusinessTraffic from "./pages/business/BusinessTraffic";
-import BusinessSearch from "./pages/business/BusinessSearch";
+import BusinessActions from "./pages/business/BusinessActions";
+import BusinessMeasurement from "./pages/business/BusinessMeasurement";
+import BusinessSettings from "./pages/business/BusinessSettings";
+import BusinessAiVisibility from "./pages/business/BusinessAiVisibility";
 import BusinessTopics from "./pages/business/BusinessTopics";
 import ComingNext from "./pages/business/ComingNext";
 import BusinessIntelligence from "./pages/business/BusinessIntelligence";
@@ -27,15 +26,17 @@ export default function App() {
         <Route index element={<BusinessOverview />} />
         <Route path="topics" element={<BusinessTopics />} />
         <Route path="intelligence" element={<BusinessIntelligence />} />
-        <Route path="tasks" element={<BusinessTasks />} />
-        <Route path="opportunities" element={<BusinessOpportunities />} />
-        <Route path="integrations" element={<BusinessIntegrations />} />
-        <Route path="search" element={<BusinessSearch />} />
-        <Route path="traffic" element={<BusinessTraffic />} />
-        <Route
-          path="ai-visibility"
-          element={<ComingNext title="נראות AI" description="ניטור נראות בפועל במנועי AI (ChatGPT, Gemini, Perplexity ועוד) מתוכנן לשלב מאוחר יותר. מוכנות GEO של האתר עצמו - קריאות העסק למכונה - מוצגת בלשונית מודיעין חיפוש." />}
-        />
+        <Route path="actions" element={<BusinessActions />} />
+        <Route path="measurement" element={<BusinessMeasurement />} />
+        <Route path="settings" element={<BusinessSettings />} />
+        <Route path="ai-visibility" element={<BusinessAiVisibility />} />
+        {/* Pre-#23 URLs keep working: redirect into the new structure. */}
+        <Route path="tasks" element={<Navigate to="../actions" replace />} />
+        <Route path="opportunities" element={<Navigate to="../actions?tab=opportunities" replace />} />
+        <Route path="search" element={<Navigate to="../measurement" replace />} />
+        <Route path="traffic" element={<Navigate to="../measurement?tab=traffic" replace />} />
+        <Route path="integrations" element={<Navigate to="../settings" replace />} />
+        {/* Future modules: reachable by URL, not in the navigation. */}
         <Route
           path="competitors"
           element={<ComingNext title="מתחרים" description="ניתוח מתחרים מתוכנן לשלב הבא, בין היתר באמצעות Semrush." />}
