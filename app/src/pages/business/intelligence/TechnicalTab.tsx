@@ -4,24 +4,48 @@ import { StatCard } from "../../../components/StatCard";
 import { Pager, usePagination } from "../../../components/ui/Pager";
 import { StatusPill } from "../../../components/ui/StatusPill";
 import { Disclosure } from "../../../components/ui/Disclosure";
-import { FINDING_TEXT, ROLE_LABELS, canonicalState, indexState, needsAttention, pageLabel, pagesCount, presenceState, structuredState, when } from "../../../lib/plainLanguage";
+import { FINDING_TEXT, PRIORITY_DISPLAY, ROLE_LABELS, canonicalState, indexState, internalLinks, pageLabel, pagePriority, pagesCount, presenceState, structuredState, when } from "../../../lib/plainLanguage";
+import type { PagePriority } from "../../../lib/plainLanguage";
+import type { StatusTone } from "../../../components/ui/StatusPill";
 import type { SeoPage } from "../../../types";
 
 const PAGE_SIZE = 15;
-type Filter = "all" | "attention" | "not_indexable" | "not_in_sitemap" | "not_crawled";
+type Filter = "all" | "important" | "check" | "not_indexable" | "not_in_sitemap" | "not_crawled";
+const PRIORITY_ORDER: Record<PagePriority, number> = { important: 0, check: 1, ok: 2 };
 
 const FILTERS: { id: Filter; label: string }[] = [
   { id: "all", label: "הכל" },
-  { id: "attention", label: "דורשים תשומת לב" },
+  { id: "important", label: "בעיות חשובות" },
+  { id: "check", label: "נקודות לבדיקה" },
   { id: "not_indexable", label: "לא יכולים להיכלל בגוגל" },
   { id: "not_in_sitemap", label: "לא במפת האתר" },
   { id: "not_crawled", label: "לא נבדקו בריצה האחרונה" }
 ];
 
+// Green stays quiet (plain check mark); only yellow/red get a pill, so the
+// eye lands on what matters.
+// `secondary` columns (sitemap, structured data, internal links) are
+// supporting detail: never a pill, so they don't compete with the status
+// and the two primary checks.
+function Signal({ tone, text, secondary = false }: { tone: StatusTone; text: string; secondary?: boolean }) {
+  if (secondary) {
+    const glyph = tone === "good" ? "✓" : tone === "neutral" ? "–" : tone === "bad" ? "✕" : "!";
+    return <span className={`signal-secondary ${tone}`}><span aria-hidden="true">{glyph}</span> {text}</span>;
+  }
+  if (tone === "good") return <span className="signal-ok"><span aria-hidden="true">✓</span> {text}</span>;
+  if (tone === "neutral") return <span className="signal-muted">{text}</span>;
+  return <StatusPill tone={tone}>{text}</StatusPill>;
+}
+
 function PageDetail({ p }: { p: SeoPage }) {
   const findings = p.diagnostics;
+  const prio = PRIORITY_DISPLAY[pagePriority(p)];
   return (
     <div className="row-detail">
+      <div className="detail-status">
+        <StatusPill tone={prio.tone}>{prio.text}</StatusPill>
+        <span>{prio.help}</span>
+      </div>
       <div className="detail-note" style={{ marginTop: 0, marginBottom: 8 }}>
         {p.indexability.state === "indexable"
           ? "לפי הסריקה, אין בדף מניעה טכנית להיכלל בגוגל. זה לא אומר ש-Google כבר כלל אותו בפועל."
@@ -47,6 +71,8 @@ function PageDetail({ p }: { p: SeoPage }) {
         <div><div className="detail-label">כותרת ראשית בתוכן</div><div>{p.h1.join(" · ") || "—"}</div></div>
         <div><div className="detail-label">תיאור לתוצאות החיפוש</div><div>{p.metaDescription || "—"}</div></div>
         <div><div className="detail-label">כמות מילים</div><div>{p.wordCount ?? "—"}</div></div>
+        <div><div className="detail-label">דפים באתר שמקשרים לדף הזה</div><div>{p.links.inboundInternalCount === 0 ? "אף דף (מבין הדפים שנבדקו)" : `${pagesCount(p.links.inboundInternalCount)} (מבין הדפים שנבדקו)`}</div></div>
+        <div><div className="detail-label">סוג הדף</div><div>{ROLE_LABELS[p.role.role] || "אחר"}{p.role.basis === "inferred" ? " (הסקת מערכת)" : ""}</div></div>
       </div>
       <Disclosure label="פרטים טכניים" tone="technical">
         <ul className="tech-list">
@@ -76,14 +102,15 @@ export function TechnicalTab({ pages }: { pages: SeoPage[] }) {
     const q = query.trim().toLowerCase();
     return pages
       .filter((p) => {
-        if (filter === "attention") return p.crawlStatus === "fetched" && needsAttention(p);
+        if (filter === "important") return p.crawlStatus === "fetched" && pagePriority(p) === "important";
+        if (filter === "check") return p.crawlStatus === "fetched" && pagePriority(p) === "check";
         if (filter === "not_indexable") return p.crawlStatus === "fetched" && p.indexability.state === "non_indexable";
         if (filter === "not_in_sitemap") return p.crawlStatus === "fetched" && p.sitemap.state === "absent";
         if (filter === "not_crawled") return p.crawlStatus !== "fetched";
         return true;
       })
       .filter((p) => !q || p.url.toLowerCase().includes(q) || (p.title || "").toLowerCase().includes(q) || pageLabel(p).path.toLowerCase().includes(q))
-      .sort((a, b) => Number(needsAttention(b)) - Number(needsAttention(a)) || a.url.localeCompare(b.url));
+      .sort((a, b) => PRIORITY_ORDER[pagePriority(a)] - PRIORITY_ORDER[pagePriority(b)] || a.url.localeCompare(b.url));
   }, [pages, filter, query]);
   const pager = usePagination(filtered, PAGE_SIZE, `${filter}|${query}`);
 
@@ -96,8 +123,8 @@ export function TechnicalTab({ pages }: { pages: SeoPage[] }) {
       <div className="stat-grid">
         <StatCard label="דפים שנבדקו" value={current.length} />
         <StatCard label="יכולים להיכלל בגוגל (לפי הסריקה)" value={`${count((p) => p.indexability.state === "indexable")}/${current.length}`} />
-        <StatCard label="דורשים תשומת לב" value={count(needsAttention)} />
-        <StatCard label="עם מידע למנועי חיפוש" value={`${count((p) => p.structuredData.state === "present")}/${current.length}`} />
+        <StatCard label="בעיות חשובות" value={count((p) => pagePriority(p) === "important")} />
+        <StatCard label="נקודות לבדיקה" value={count((p) => pagePriority(p) === "check")} />
       </div>
 
       <div className="table-toolbar">
@@ -111,20 +138,26 @@ export function TechnicalTab({ pages }: { pages: SeoPage[] }) {
         <input className="select-quiet search-input" placeholder="חיפוש דף…" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="חיפוש דף" />
       </div>
 
+      <div className="priority-legend" aria-label="מקרא">
+        <span><span className="signal-ok">✓</span> נראה תקין</span>
+        <span><StatusPill tone="warn">נקודה לבדיקה</StatusPill> כדאי לבדוק, לא תקלה דחופה</span>
+        <span><StatusPill tone="bad">בעיה חשובה</StatusPill> עלולה למנוע מהדף להיכלל בגוגל</span>
+      </div>
+
       {filtered.length === 0 ? (
         <EmptyState title="אין דפים שמתאימים לסינון" subtitle="נסה/י סינון אחר." />
       ) : (
         <div className="data-table-wrap table-sticky">
-          <table className="data-table">
+          <table className="data-table seo-table">
             <thead>
               <tr>
                 <th>דף</th>
-                <th>סוג</th>
+                <th>מצב</th>
                 <th title="לפי הסריקה שלנו: האם אין בדף מניעה טכנית (כמו הוראה שמבקשת ממנועי חיפוש לא לכלול את הדף) שתמנע מ-Google לכלול אותו. לא נבדק אם Google כבר כלל את הדף בפועל.">יכול להיכלל בגוגל</th>
                 <th title="כתובת הדף הראשית ש-Google אמור להכיר בה">כתובת ראשית</th>
                 <th>במפת האתר</th>
                 <th title="מידע שעוזר למנועי חיפוש להבין את הדף">מידע למנועי חיפוש</th>
-                <th title="כמה דפים אחרים באתר (מתוך שנבדקו) מקשרים לדף">מקושר מ-</th>
+                <th title="כמה דפים אחרים באתר מקשרים לדף הזה (מבין הדפים שנבדקו)">קישורים פנימיים</th>
                 <th><span className="visually-hidden">פירוט</span></th>
               </tr>
             </thead>
@@ -137,21 +170,25 @@ export function TechnicalTab({ pages }: { pages: SeoPage[] }) {
                 const can = canonicalState(p.canonical.state);
                 const sm = presenceState(p.sitemap.state);
                 const sd = structuredState(p.structuredData.state);
+                const links = internalLinks(p);
+                const prio = PRIORITY_DISPLAY[pagePriority(p)];
                 return (
                   <Fragment key={p.id}>
                     <tr className={`${open ? "row-open" : ""} ${stale ? "row-stale" : ""}`}>
                       <td className="cell-page">
                         <div className="cell-primary">{label.primary}</div>
-                        <div className="cell-secondary" dir="auto">{label.path}</div>
-                        {stale && <div className="cell-secondary">לא נבדק בריצה האחרונה</div>}
-                        {!stale && needsAttention(p) && <StatusPill tone="warn">דורש תשומת לב</StatusPill>}
+                        <div className="cell-secondary">
+                          <span dir="auto">{label.path}</span> · {ROLE_LABELS[p.role.role] || "אחר"}
+                        </div>
                       </td>
-                      <td className="text-muted">{ROLE_LABELS[p.role.role] || "אחר"}</td>
-                      <td><StatusPill tone={idx.tone}>{idx.text}</StatusPill></td>
-                      <td><StatusPill tone={can.tone}>{can.text}</StatusPill></td>
-                      <td><StatusPill tone={sm.tone}>{sm.text}</StatusPill></td>
-                      <td><StatusPill tone={sd.tone}>{sd.text}</StatusPill></td>
-                      <td className="text-muted">{p.links.inboundInternalCount === 0 ? "אף דף" : pagesCount(p.links.inboundInternalCount)}</td>
+                      <td title={stale ? undefined : prio.help}>
+                        {stale ? <span className="signal-muted">לא נבדק בריצה האחרונה</span> : prio.tone === "good" ? <Signal tone="good" text={prio.text} /> : <StatusPill tone={prio.tone}>{prio.text}</StatusPill>}
+                      </td>
+                      <td><Signal tone={idx.tone} text={idx.text} /></td>
+                      <td><Signal tone={can.tone} text={can.text} /></td>
+                      <td><Signal tone={sm.tone} text={sm.text} secondary /></td>
+                      <td><Signal tone={sd.tone} text={sd.text} secondary /></td>
+                      <td><Signal tone={links.tone} text={links.text} secondary /></td>
                       <td style={{ textAlign: "end" }}>
                         <button type="button" className="disclosure" aria-expanded={open} onClick={() => setOpenId(open ? null : p.id)}>
                           פירוט <span className="chev" aria-hidden="true">▾</span>

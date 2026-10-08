@@ -32,7 +32,7 @@ export default function BusinessWorkspace() {
   const business = businesses?.find((b) => b.id === businessId) ?? null;
 
   return (
-    <AppShell>
+    <AppShell wide>
       <div className="app-main-header">
         <div>
           <h1 className="app-main-title">

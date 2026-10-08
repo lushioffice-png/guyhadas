@@ -81,6 +81,35 @@ export function needsAttention(p: SeoPage): boolean {
   return p.diagnostics.some((d) => ATTENTION.has(d.code));
 }
 
+// Presentation-only priority for the Technical SEO list (issue #23
+// follow-up). It splits the SAME needsAttention() set into two visual
+// levels so not every flagged page looks broken; the diagnostics and the
+// needsAttention calculation are unchanged.
+//   important - can stop the page from being included / points Google elsewhere
+//   check     - worth a look (missing title/H1, broken structured data,
+//               no internal links among the crawled pages)
+//   ok        - nothing from the attention set (housekeeping notes, if any,
+//               stay in the row details)
+const IMPORTANT = new Set(["non_indexable", "blocked_by_robots", "canonical_conflicting", "canonical_points_elsewhere"]);
+
+export type PagePriority = "important" | "check" | "ok";
+
+export function pagePriority(p: SeoPage): PagePriority {
+  if (p.diagnostics.some((d) => IMPORTANT.has(d.code))) return "important";
+  if (needsAttention(p)) return "check";
+  return "ok";
+}
+
+export const PRIORITY_DISPLAY: Record<PagePriority, { tone: StatusTone; text: string; help: string }> = {
+  important: { tone: "bad", text: "בעיה חשובה", help: "משהו בדף עלול למנוע ממנו להיכלל בגוגל או מפנה את Google לכתובת אחרת." },
+  check: { tone: "warn", text: "נקודה לבדיקה", help: "לא תקלה דחופה - פרט שכדאי לבדוק, כמו כותרת חסרה או דף שאף דף אחר באתר לא מקשר אליו." },
+  ok: { tone: "good", text: "נראה תקין", help: "לא נמצא בדף משהו שדורש טיפול. הערות קטנות, אם יש, מופיעות בפירוט." }
+};
+
+export function internalLinks(p: SeoPage): { tone: StatusTone; text: string } {
+  return p.links.inboundInternalCount > 0 ? { tone: "good", text: "יש" } : { tone: "warn", text: "אין קישורים" };
+}
+
 export function pageLabel(p: SeoPage): { primary: string; path: string } {
   let path = p.url;
   try {
