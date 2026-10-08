@@ -18,8 +18,12 @@
 
 const SEMRUSH_BASE_URL = "https://api.semrush.com/";
 
+// A placeholder secret (deploys need SEMRUSH_API_KEY to exist before a real
+// key is bought) counts as "not configured", so no doomed request is made.
 function isSemrushConfigured() {
-  return !!process.env.SEMRUSH_API_KEY;
+  const key = (process.env.SEMRUSH_API_KEY || "").trim();
+  if (key.length < 20) return false;
+  return !/not[-_ ]?(yet|configured)|placeholder|changeme|dummy/i.test(key);
 }
 
 function getSemrushApiKey() {
