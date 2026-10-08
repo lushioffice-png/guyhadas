@@ -46,25 +46,37 @@ module.exports = {
     }
   },
   semrush: {
-    discoverFromSemrush: {
-      // Semrush's API doesn't expose a $/unit price (it depends on the
-      // account's subscription tier, which this code has no way to read) -
-      // cost is tracked in API units instead, a real and deterministic
-      // quantity, per the cost-control rule's "best available unit/quota
-      // estimate" fallback for providers without predictable $ pricing.
-      // 30*40 (phrase_related) + 50*10 (domain_organic) + 10*40
-      // (domain_organic_organic) - see functions/semrush.js for the
-      // per-report unit costs and limits this must stay in sync with.
-      unitsPerCall: 30 * 40 + 50 * 10 + 10 * 40,
-      maxRequestsPerBusinessPerDay: 10,
-      maxRequestsPerBusinessPerMonth: 60,
+    // M3.2: Semrush discovery is split into two governed operations so a
+    // per-seed run never re-buys domain-level data. Semrush has no public
+    // $/unit price (it depends on the subscription), so usage is recorded in
+    // API units: per-line rates from developer.semrush.com (current data).
+    // Each ledger row records providerUnitsUsed = lines returned x rate.
+    // (The former single operation "discoverFromSemrush" - ~2,100 units per
+    // call - is retired; its ledger rows remain as history.)
+    discoverRelatedForSeed: {
+      // phrase_related, 30 lines max x 40 units = 1,200 units per call max
+      unitsPerLine: 40,
+      maxUnitsPerCall: 30 * 40,
+      maxRequestsPerBusinessPerDay: 20,
+      maxRequestsPerBusinessPerMonth: 120,
       maxRequestsGlobalPerDay: 100,
       maxRequestsGlobalPerMonth: 1000,
-      // Unlike the Anthropic cache above, this one DOES expire on a timer
-      // even with an unchanged seed/domain - real-world search demand
-      // genuinely drifts day to day, so a week-old Semrush pull going
-      // stale isn't the same situation as a website's own text being
-      // unchanged.
+      // Search demand drifts, so cached results expire after 24 h even for
+      // an unchanged seed (unlike the Anthropic analysis cache).
+      cacheTtlMs: 24 * 60 * 60 * 1000,
+      circuitBreakerThreshold: 5,
+      circuitBreakerCooldownMs: 15 * 60 * 1000
+    },
+    discoverDomainOrganic: {
+      // domain_organic 50 lines x 10 + domain_organic_organic 10 lines x 40
+      // = 900 units per call max
+      unitsPerKeywordLine: 10,
+      unitsPerCompetitorLine: 40,
+      maxUnitsPerCall: 50 * 10 + 10 * 40,
+      maxRequestsPerBusinessPerDay: 3,
+      maxRequestsPerBusinessPerMonth: 30,
+      maxRequestsGlobalPerDay: 30,
+      maxRequestsGlobalPerMonth: 300,
       cacheTtlMs: 24 * 60 * 60 * 1000,
       circuitBreakerThreshold: 5,
       circuitBreakerCooldownMs: 15 * 60 * 1000

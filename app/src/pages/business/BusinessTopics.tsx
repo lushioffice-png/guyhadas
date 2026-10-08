@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useOutletContext } from "react-router-dom";
 import { EmptyState } from "../../components/EmptyState";
 import {
@@ -10,20 +10,18 @@ import {
   createManualTopic,
   listenCompetitors,
   addManualCompetitor,
-  deleteCompetitor
+  deleteCompetitor,
+  listenRuleExcludedKeywords
 } from "../../lib/firestore";
-import { discoverFromSearchConsole, discoverFromSemrush, discoverFromSemrushNewPaidRun } from "../../lib/functions";
-import { ConfirmPaidRunDialog } from "../../components/review/ConfirmPaidRunDialog";
-import { initialPaidRunState, paidRunReducer, runIsForced } from "../../lib/paidRunFlow";
-import type { DiscoveryResult } from "../../lib/functions";
-import { KNOWLEDGE_TYPE_LABELS, DISCOVERY_SOURCE_LABELS } from "../../types";
-import type { BusinessKnowledge, SearchTopic, TopicStatus, KnowledgeType, Competitor, BusinessService } from "../../types";
+import { KNOWLEDGE_TYPE_LABELS } from "../../types";
+import type { BusinessKnowledge, SearchTopic, TopicStatus, KnowledgeType, Competitor, BusinessService, Keyword } from "../../types";
 import type { BusinessContext } from "./BusinessWorkspace";
 import { updateSearchTopicStatus } from "../../lib/firestore";
 import { ConfirmDeleteButton } from "../../components/review/ConfirmDeleteButton";
 import { Badge } from "../../components/review/Badge";
 import { ServiceMapSection } from "./topics/ServiceMapSection";
 import { SearchTopicCard } from "./topics/SearchTopicCard";
+import { SeedDiscoveryPanel } from "./topics/SeedDiscoveryPanel";
 
 // Business & Service Discovery (roadmap M3.1) + Search Universe &
 // Qualification. The tab follows the pipeline top to bottom:
@@ -48,19 +46,6 @@ function formatDate(value: unknown): string {
   return ts.toDate().toLocaleDateString("he-IL", { dateStyle: "short" });
 }
 
-function DiscoveryResultSummary({ result }: { result: DiscoveryResult }) {
-  return (
-    <div className="metric-list">
-      <span><strong>{result.discovered}</strong>נמצאו</span>
-      <span><strong>{result.topicsCreated}</strong>נושאים חדשים</span>
-      <span><strong>{result.topicsMerged}</strong>מוזגו לקיימים</span>
-      <span><strong>{result.excluded}</strong>הוחרגו אוטומטית</span>
-      {result.competitorsFound !== undefined && <span><strong>{result.competitorsFound}</strong>מתחרים</span>}
-      {result.cacheHit && <span>נעשה שימוש בתוצאה שמורה (ללא פנייה חדשה ל-Semrush)</span>}
-    </div>
-  );
-}
-
 export default function BusinessTopics() {
   const { business } = useOutletContext<BusinessContext>();
   const [knowledge, setKnowledge] = useState<BusinessKnowledge[] | null>(null);
@@ -68,12 +53,8 @@ export default function BusinessTopics() {
   const [topics, setTopics] = useState<SearchTopic[] | null>(null);
   const [competitors, setCompetitors] = useState<Competitor[] | null>(null);
 
-  const [runningSource, setRunningSource] = useState<string | null>(null);
-  const [discoveryError, setDiscoveryError] = useState<string | null>(null);
-  const [lastResult, setLastResult] = useState<{ source: string; result: DiscoveryResult } | null>(null);
-  const [semrushSeed, setSemrushSeed] = useState("");
-  // Paid "new Semrush pull" only via the confirmation dialog (lib/paidRunFlow.ts).
-  const [semrushFlow, dispatchSemrush] = useReducer(paidRunReducer, initialPaidRunState);
+  const [ruleExcluded, setRuleExcluded] = useState<Keyword[] | null>(null);
+  const [showExcluded, setShowExcluded] = useState(false);
 
   const [newTopicTitle, setNewTopicTitle] = useState("");
   const [newTopicNotes, setNewTopicNotes] = useState("");
@@ -92,38 +73,13 @@ export default function BusinessTopics() {
       listenBusinessKnowledge(business.id, setKnowledge),
       listenSearchTopics(business.id, setTopics),
       listenCompetitors(business.id, setCompetitors),
-      listenBusinessServices(business.id, setServices)
+      listenBusinessServices(business.id, setServices),
+      listenRuleExcludedKeywords(business.id, setRuleExcluded)
     ];
     return () => unsubs.forEach((u) => u());
   }, [business]);
 
   if (!business) return <div className="loading-row">טוען…</div>;
-
-  async function runDiscovery(source: "gsc" | "semrush", paidNewRun = false) {
-    if (!business) return;
-    setRunningSource(source);
-    setDiscoveryError(null);
-    try {
-      let result: DiscoveryResult;
-      if (source === "gsc") result = await discoverFromSearchConsole(business.id);
-      else {
-        if (!semrushSeed.trim()) {
-          setDiscoveryError("יש לבחור שירות מאושר או להזין מילת מפתח מקור (seed phrase) להרצת Semrush");
-          setRunningSource(null);
-          return;
-        }
-        result = paidNewRun
-          ? await discoverFromSemrushNewPaidRun(business.id, semrushSeed.trim())
-          : await discoverFromSemrush(business.id, semrushSeed.trim());
-      }
-      setLastResult({ source, result });
-    } catch (err) {
-      setDiscoveryError(err instanceof Error ? err.message : "שגיאה בגילוי");
-    } finally {
-      setRunningSource(null);
-      if (source === "semrush") dispatchSemrush({ type: "finished" });
-    }
-  }
 
   async function handleAddTopic(e: FormEvent) {
     e.preventDefault();
@@ -163,6 +119,7 @@ export default function BusinessTopics() {
   // evidence, never the Search Universe.
   const legacyWebsiteTopics = reviewTopics.filter((t) => t.source === "website");
   const approvedTopics = (topics || []).filter((t) => APPROVED_STATUSES.includes(t.status));
+  const excludedTopics = (topics || []).filter((t) => t.status === "exclude");
   const confirmedServices = (services || []).filter((s) => s.ownerStatus === "confirmed");
 
   return (
@@ -194,76 +151,12 @@ export default function BusinessTopics() {
           </div>
         </div>
 
-        <div className="panel">
-          <div className="panel-title" style={{ marginBottom: "var(--space-3)" }}>גילוי נושאים</div>
-          <div className="panel-row">
-            <button type="button" className="btn btn-outline" disabled={runningSource !== null} onClick={() => runDiscovery("gsc")}>
-              {runningSource === "gsc" ? "סורק…" : "גילוי מ-Search Console"}
-            </button>
-            <span className="text-dim" aria-hidden="true">|</span>
-            <input
-              value={semrushSeed}
-              onChange={(e) => setSemrushSeed(e.target.value)}
-              placeholder="שירות מאושר / מילת מפתח מקור"
-              list="confirmed-services-datalist"
-              className="select-quiet"
-              style={{ padding: "8px 10px", minWidth: 220 }}
-              aria-label="מילת מפתח מקור ל-Semrush"
-            />
-            <datalist id="confirmed-services-datalist">
-              {confirmedServices.map((s) => (
-                <option key={s.id} value={s.name} />
-              ))}
-            </datalist>
-            <button
-              type="button"
-              className="btn btn-outline"
-              disabled={runningSource !== null}
-              onClick={() => {
-                dispatchSemrush({ type: "start" });
-                void runDiscovery("semrush");
-              }}
-            >
-              {runningSource === "semrush" ? "מריץ…" : "גילוי מ-Semrush"}
-            </button>
-            {lastResult?.source === "semrush" && lastResult.result.cacheHit && (
-              <button type="button" className="btn btn-quiet btn-sm" disabled={runningSource !== null} onClick={() => dispatchSemrush({ type: "requestNewRun" })}>
-                שליפה חדשה (בתשלום)…
-              </button>
-            )}
-          </div>
-          {semrushFlow.phase === "confirming" && (
-            <ConfirmPaidRunDialog
-              providerLabel="Semrush"
-              estimateNote="עלות משוערת: עד כ-2,100 יחידות API של Semrush."
-              onReuse={() => dispatchSemrush({ type: "cancel" })}
-              onConfirmPaid={() => {
-                const next = paidRunReducer(semrushFlow, { type: "confirmNewRun" });
-                dispatchSemrush({ type: "confirmNewRun" });
-                void runDiscovery("semrush", runIsForced(next));
-              }}
-              onClose={() => dispatchSemrush({ type: "cancel" })}
-            />
-          )}
-          <p className="panel-meta" style={{ margin: "var(--space-3) 0 0" }}>
-            Search Console חינמי ומשקף נראות קיימת בגוגל. Semrush בתשלום ביחידות API — שליפה זהה תוך 24 שעות חוזרת מהמטמון
-            ללא עלות. ל-Semrush מומלץ להזין שירות מאושר ממפת השירותים. Semrush יחזיר שגיאה
-            ברורה עד שיוגדר מפתח API עם יחידות.
-          </p>
-          {discoveryError && <div className="login-error" style={{ marginTop: "var(--space-3)", marginBottom: 0 }}>{discoveryError}</div>}
-          {lastResult && (
-            <div style={{ marginTop: "var(--space-3)" }}>
-              <strong style={{ fontSize: "0.88rem" }}>
-                {DISCOVERY_SOURCE_LABELS[lastResult.source as keyof typeof DISCOVERY_SOURCE_LABELS] || lastResult.source}
-              </strong>
-              <DiscoveryResultSummary result={lastResult.result} />
-            </div>
-          )}
-        </div>
+        <SeedDiscoveryPanel business={business} confirmedCount={confirmedServices.length} />
 
         <div className="summary-bar" style={{ marginTop: "var(--space-4)" }}>
           <span className="summary-chip" style={{ cursor: "default" }}><strong>{reviewTopics.length}</strong>ממתינים לבדיקה</span>
           <span className="summary-chip" style={{ cursor: "default" }}><strong>{approvedTopics.length}</strong>מאושרים</span>
+          <span className="summary-chip" style={{ cursor: "default" }}><strong>{excludedTopics.length + (ruleExcluded?.length || 0)}</strong>הוחרגו</span>
         </div>
 
         <h4 className="panel-title" style={{ margin: "var(--space-4) 0 var(--space-3)" }}>לבדיקה</h4>
@@ -330,6 +223,41 @@ export default function BusinessTopics() {
                 <SearchTopicCard key={t.id} topic={t} />
               ))}
             </div>
+          </div>
+        )}
+      </section>
+
+      {/* --- Excluded / rejected: kept as negative signals, never deleted --- */}
+      <section className="subsection">
+        <button
+          type="button"
+          className="disclosure"
+          aria-expanded={showExcluded}
+          onClick={() => setShowExcluded((v) => !v)}
+          style={{ fontSize: "0.95rem" }}
+        >
+          הוחרגו - היסטוריה ({excludedTopics.length} נושאים, {ruleExcluded?.length || 0} שאילתות לפי כלל) <span className="chev" aria-hidden="true">▾</span>
+        </button>
+        {showExcluded && (
+          <div style={{ marginTop: "var(--space-3)" }}>
+            <p className="panel-meta" style={{ marginTop: 0 }}>
+              נושאים שהחרגת נשארים מוחרגים גם כשגילוי עתידי מוצא אותם שוב. שאילתות שכלל החרגה שלך עצר נשמרות כאן עם הכלל - לא
+              נמחקות.
+            </p>
+            <div className="record-list">
+              {excludedTopics.map((t) => (
+                <SearchTopicCard key={t.id} topic={t} />
+              ))}
+            </div>
+            {ruleExcluded && ruleExcluded.length > 0 && (
+              <ul className="evidence-list">
+                {ruleExcluded.map((k) => (
+                  <li key={k.id} className="evidence-item" style={{ padding: "6px 12px" }}>
+                    <strong>{k.query}</strong> — הוחרג לפי הכלל „{k.excludedByRule?.rule}“
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
       </section>

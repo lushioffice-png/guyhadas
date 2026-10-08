@@ -1,5 +1,5 @@
 import { auth } from "../firebase";
-import type { Ga4SnapshotData, SearchConsoleSnapshotData, CrawlReport, CostControlDecision } from "../types";
+import type { Ga4SnapshotData, SearchConsoleSnapshotData, CrawlReport, CostControlDecision, SeedBuildResult, SeedRef } from "../types";
 
 // Thin wrapper around the Visibility OS Cloud Functions (functions/visibility.js,
 // Milestone 2+). Same deployment shape as the existing public-site functions
@@ -25,7 +25,9 @@ async function callFunction<T>(name: string, body: Record<string, unknown>): Pro
   const json = await res.json().catch(() => ({}) as Record<string, unknown>);
   if (!res.ok || json.success === false) {
     const message = typeof json.error === "string" ? json.error : `${name} נכשל (${res.status})`;
-    throw new Error(message);
+    // Keep the governor's fields (blockedReason, cacheDecision,
+    // providerCalled) so the UI can say exactly what happened.
+    throw Object.assign(new Error(message), { details: json });
   }
   return json as T;
 }
@@ -92,30 +94,56 @@ export interface DiscoveryResult {
   topicsMerged: number;
   excluded: number;
   refreshed: number;
+  ignored?: number;
   competitorsFound?: number;
-  pagesScanned?: number;
+  // Governed (Semrush) calls only - see functions/apiUsage.js.
+  cacheHit?: boolean;
   cacheDecision?: string;
   providerCalled?: boolean;
-  // Semrush discovery only - set when a previous call with the identical
-  // seed/database/domain, made within the cache's TTL, was reused instead
-  // of spending another Semrush API call (Universal External API
-  // Cost-Control Rule - see functions/apiUsage.js and the project doc).
-  cacheHit?: boolean;
+  providerUnitsUsed?: number;
+  seed?: SeedRef;
+}
+
+export interface GovernedErrorDetails {
+  blockedReason?: string;
+  cacheDecision?: string;
+  providerCalled?: boolean;
+}
+
+export function governedDetails(err: unknown): GovernedErrorDetails | null {
+  const d = (err as { details?: GovernedErrorDetails } | null)?.details;
+  return d && typeof d === "object" ? d : null;
+}
+
+// Seeds from the confirmed Service Map (Firestore reads only - no
+// provider call, no cost).
+export function buildSearchSeeds(businessId: string): Promise<SeedBuildResult> {
+  return callFunction<SeedBuildResult>("visibilityBuildSearchSeeds", { businessId });
 }
 
 export function discoverFromSearchConsole(businessId: string): Promise<DiscoveryResult> {
   return callFunction<DiscoveryResult>("visibilityDiscoverFromSearchConsole", { businessId });
 }
 
-// Normal discovery: reuses a cached Semrush result when one exists ($0).
-export function discoverFromSemrush(businessId: string, seedPhrase: string, database?: string): Promise<DiscoveryResult> {
-  return callFunction<DiscoveryResult>("visibilityDiscoverFromSemrush", { businessId, seedPhrase, database });
+// Market discovery for one seed. Normal run: a cached result is reused for
+// $0; on a miss it is a governed paid call (quota-checked). The server
+// rebuilds the phrase from the confirmed Service Map - only the key is sent.
+export function discoverFromSemrushSeed(businessId: string, seedKey: string): Promise<DiscoveryResult> {
+  return callFunction<DiscoveryResult>("visibilityDiscoverFromSemrush", { businessId, seedKey });
 }
 
-// PAID: bypasses the cache. Only call after the owner explicitly confirmed
-// a new paid run (components/review/ConfirmPaidRunDialog).
-export function discoverFromSemrushNewPaidRun(businessId: string, seedPhrase: string, database?: string): Promise<DiscoveryResult> {
-  return callFunction<DiscoveryResult>("visibilityDiscoverFromSemrush", { businessId, seedPhrase, database, forceRefresh: true });
+// PAID: bypasses the cache. Only after explicit owner confirmation
+// (components/review/ConfirmPaidRunDialog).
+export function discoverFromSemrushSeedNewPaidRun(businessId: string, seedKey: string): Promise<DiscoveryResult> {
+  return callFunction<DiscoveryResult>("visibilityDiscoverFromSemrush", { businessId, seedKey, forceRefresh: true });
+}
+
+export function discoverDomainFromSemrush(businessId: string): Promise<DiscoveryResult> {
+  return callFunction<DiscoveryResult>("visibilityDiscoverDomainFromSemrush", { businessId });
+}
+
+export function discoverDomainFromSemrushNewPaidRun(businessId: string): Promise<DiscoveryResult> {
+  return callFunction<DiscoveryResult>("visibilityDiscoverDomainFromSemrush", { businessId, forceRefresh: true });
 }
 
 // --- Business & Service Discovery (functions/businessUnderstanding.js) ---
