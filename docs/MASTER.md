@@ -1255,9 +1255,9 @@ If cache lookup, quota lookup or governance infrastructure fails, the system mus
 
 ### Current production-readiness note
 
-Anthropic and Semrush operations are governed by the current cost-control architecture.
+Anthropic and Semrush operations are governed by the current cost-control architecture. Since M4, the Search Console query × page request used by Search Intelligence (`google.searchConsoleQueryPage`) is governed too.
 
-Google APIs used by visibility/analytics flows are not yet fully normalized under the same governance path and remain a production-hardening gap. Do not treat this as permission to add new ungoverned calls in M3.2.
+The other Google APIs used by visibility/analytics flows (GA4 / GSC daily sync, GSC discovery) are not yet normalized under the same governance path and remain a production-hardening gap. Do not treat this as permission to add new ungoverned calls.
 
 ---
 
@@ -1825,7 +1825,7 @@ M3.1 is therefore treated as **DONE**.
 
 ### M3.2 — Search Universe & Qualification
 
-M3.2 is the current implementation milestone.
+M3.2 is DONE (merged `3aadc0b`; live Hagar acceptance validated; live Semrush discovery deferred — no usable direct API access).
 
 Contract:
 
@@ -1890,7 +1890,7 @@ Those remain future milestones.
 
 ### M3.2 implementation status (PR #21, issue #20)
 
-**Status: IMPLEMENTED + TESTED. Live Hagar acceptance pending deploy. Live Semrush blocked by 0 API units (path covered by deterministic tests).** Details and decisions: `docs/M3.2_IMPLEMENTATION_NOTES.md`.
+**Status: DONE — merged and live-validated on Hagar. Live Semrush discovery deferred (path covered by deterministic tests).** Details and decisions: `docs/M3.2_IMPLEMENTATION_NOTES.md`.
 
 Implemented:
 
@@ -1907,6 +1907,15 @@ Acceptance (implementation brief §12): items 1–14, 16–18 covered by automat
 M3.2 → M4 input: `searchTopics` with status relevant / priority / brand_strategic, their `keywords` (per-source evidence, `seedRefs` to confirmed services/facets) and qualification reasons; negative signals = excluded topics + `keywords.excludedByRule`.
 
 Known limitations: Hebrew morphology not normalized (e.g. אדריכל / אדריכלות); the place guard knows only recorded places; English-only profile markets produce no geography seeds for Hebrew services (the UI asks for the Hebrew name). Google API governance gap: see §34 and §42.
+
+
+### M4 — Search Intelligence & Baseline (current)
+
+**Status: IMPLEMENTED + TESTED on `feature/m4-search-intelligence`; live Hagar acceptance pending deploy.** Contract: `docs/M4_IMPLEMENTATION_BRIEF.md`; decisions and evidence: `docs/M4_IMPLEMENTATION_NOTES.md`.
+
+Implemented: page inventory with observed technical SEO state (`seoPages`); per-approved-topic intelligence with GSC current (query × page), GSC discovery and Semrush as separate evidence, observed vs inferred pages and explicit missing data (`topicIntelligence`); GEO readiness from website signals only (not AI visibility); run records (`intelligenceRuns`); immutable, versioned baselines (`baselines`, create-only; `businesses.baselineDate` is now a server-set pointer). One governed provider call (GSC query × page); no Semrush, GA4 or LLM call; SERP context `not_available`.
+
+Not implemented (M5+): opportunities, decisions, intent ownership, cannibalization, ImpactPrediction, change events, measurement/learning, AI visibility monitoring, LLM Website Understanding.
 
 ---
 
