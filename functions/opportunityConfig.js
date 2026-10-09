@@ -35,8 +35,8 @@ const THRESHOLDS = Object.freeze({
   // absolute floor and the business's own lower-tercile of topic impressions.
   minImpressionsAbsolute: 20,
   // Priority bands on the 0..100 normalized score.
-  highBand: 65,
-  mediumBand: 40
+  highBand: 75,
+  mediumBand: 50
 });
 
 // Effort per type (ASSUMPTION): 3 = small change, 1 = large.

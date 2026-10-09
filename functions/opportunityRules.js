@@ -148,9 +148,13 @@ function score(factors) {
   return Math.round((known.reduce((s, f) => s + f.contribution, 0) / max) * 100);
 }
 
-function band(type, s) {
+// Guards keep "high" meaningful: a blocker on a topic page is never low;
+// an overlap observation is monitor-only; site-level clarity items and
+// anything we are not confident about are at most medium.
+function band(type, s, confidence = "high") {
   let p = s >= THRESHOLDS.highBand ? "high" : s >= THRESHOLDS.mediumBand ? "medium" : "low";
   if (type === "technical_blocker" && p === "low") p = "medium";
+  if ((type === "entity_clarity" || confidence === "low") && p === "high") p = "medium";
   if (type === "page_overlap_observed") p = "low";
   return p;
 }
@@ -233,9 +237,9 @@ function detect(input, weights) {
 
   function finish(o) {
     const s = score(o.factors);
-    const priority = band(o.type, s);
     const unknown = o.factors.filter((f) => f.level == null && !f.notApplicable).map((f) => f.key);
     const conf = confidenceOf({ ...o.conf, unknownFactors: unknown, hasBaseline });
+    const priority = band(o.type, s, conf.confidence);
     const valueFactors = o.factors.filter((f) => ["businessRelevance", "demand", "upside"].includes(f.key) && f.level != null);
     const valueLevel = valueFactors.length ? Math.round(valueFactors.reduce((a, f) => a + f.level, 0) / valueFactors.length) : null;
     const missing = [...new Set([...(o.missing || []), ...unknown.map((k) => `factor_unknown:${k}`), ...(hasBaseline ? [] : ["no_baseline"])])];

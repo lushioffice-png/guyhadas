@@ -215,9 +215,14 @@ const byType = (opps, type) => opps.filter((o) => o.type === type);
     const rank = byType(opps, "ranking_upside")[0];
     const hidden = byType(opps, "page_not_visible")[0];
     assert.ok(rank.score > hidden.score, "observed high-demand upside outranks an inferred, unseen page");
-    assert.strictEqual(band("ranking_upside", 65), "high");
-    assert.strictEqual(band("ranking_upside", 64), "medium");
+    assert.strictEqual(band("ranking_upside", 75), "high");
+    assert.strictEqual(band("ranking_upside", 74), "medium");
+    assert.strictEqual(band("ranking_upside", 49), "low");
     assert.strictEqual(band("technical_blocker", 10), "medium");
+    assert.strictEqual(band("ranking_upside", 95, "low"), "medium", "low confidence is never high priority");
+    assert.strictEqual(band("entity_clarity", 95), "medium", "site-level clarity is at most medium");
+    const highs = opps.filter((o) => o.priority === "high").map((o) => o.type).sort();
+    assert.deepStrictEqual(highs, ["ranking_upside", "technical_blocker"], "high is reserved for strong, observed findings");
   });
 
   await test("confidence: reasons reduce it; observed + crawled + baseline = high", async () => {
