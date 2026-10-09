@@ -450,6 +450,8 @@ const byType = (opps, type) => opps.filter((o) => o.type === type);
       const v = factorOf(o, "observedVisibility");
       assert.strictEqual(v.notApplicable, true, `${type}: missing visibility is the reason, not a low score`);
       assert.strictEqual(v.contribution, null);
+      assert.strictEqual(o.signals.visibility.impressions, 0, `${type}: zero impressions kept as an observed visibility fact`);
+      assert.strictEqual(o.signals.visibility.source, "search_console");
     }
   });
 

@@ -182,7 +182,7 @@ function confidenceOf({ gscAvailable, unknownFactors, inferredTarget, uncrawledT
   }
   if (inferredTarget) {
     level--;
-    reasons.push("הדף המשויך נמצא לפי תוכן (הסקה), לא לפי נתוני גוגל");
+    reasons.push("הדף המשויך נמצא לפי תוכן (הסקה), לא לפי נתוני Search Console");
   }
   if (uncrawledTarget) {
     level--;
@@ -228,9 +228,14 @@ function baselineEvidence(ctx) {
   return [evidence(`baselines/${ctx.baseline.id}`, "baseline", { collection: "baselines", docId: ctx.baseline.id, field: null }, `בייסליין גרסה ${ctx.baseline.version}`, "observed", ctx.baseline.capturedAtMs)];
 }
 
+// Search Console observation for the topic in the period. "no_observation"
+// is a real observation (zero impressions for this site) - not unknown, and
+// not market demand.
 function metricsOf(ti) {
   const g = ti.gscCurrent || {};
-  return g.status === "available" ? { impressions: g.impressions, clicks: g.clicks, ctr: g.ctr, position: g.avgPosition } : null;
+  if (g.status === "available") return { impressions: g.impressions, clicks: g.clicks, ctr: g.ctr, position: g.avgPosition };
+  if (g.status === "no_observation") return { impressions: 0, clicks: 0, ctr: null, position: null };
+  return null;
 }
 
 // ---------------------------------------------------------------------------
