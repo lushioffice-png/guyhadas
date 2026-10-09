@@ -99,7 +99,7 @@ M5 detects **opportunity kinds**; each maps to MASTER §20 candidate actions. M6
 
 | Type | Detected when (all deterministic) | Candidate actions |
 |---|---|---|
-| `technical_blocker` | A page that serves an approved topic (observed in GSC or content-matched) **or** has its own GSC impressions is, per the crawl, non-indexable, robots-blocked, or has a conflicting / elsewhere-pointing canonical | IMPROVE_PAGE, DEINDEX_NOINDEX_REVIEW (confirm the blocker is unintended) |
+| `technical_blocker` | A page that serves an approved topic (observed in GSC for it, or content-matched) and was fetched in the latest crawl is, per the crawl, non-indexable, robots-blocked, or has a conflicting / elsewhere-pointing canonical | IMPROVE_PAGE, DEINDEX_NOINDEX_REVIEW (confirm the blocker is unintended) |
 | `ranking_upside` | Approved topic with an observed page whose impression-weighted position is 4–20 and impressions above the business's own floor | IMPROVE_PAGE, UPDATE_CONTENT, ADD_INTERNAL_LINKS |
 | `ctr_upside` | Approved topic with average position ≤ 10, meaningful impressions, and CTR well below the **site's own** CTR | IMPROVE_PAGE (title/description) |
 | `coverage_gap` | Approved, business-relevant topic with **no** observed page and **no** content-matched page | CREATE_PAGE, IMPROVE_PAGE (extend an existing page) — M6 chooses |
@@ -134,7 +134,7 @@ Trace: `Opportunity → factors/signals → evidence → sourceRef → originati
 
 ## 7. Deduplication
 
-`dedupeKey = sha256(businessId | type | sorted(topicIds) | sorted(pageKeys) | signalKey)` (first 20 hex). The document id is `{businessId}_{dedupeKey}`, so the same situation found again **updates** the same document (detection count, evidence, scores) instead of creating a duplicate. Two different types on the same page/topic are different opportunities (e.g. a technical blocker and an internal-linking gap). The same page serving two topics with the same issue (e.g. a blocker) is deduped on the page, listing both topics.
+`dedupeKey = sha256(businessId | type | target)` (first 20 hex), where the target is the topic for topic-level types (ranking, CTR, coverage, not-visible, overlap — the page may change and it is still the same opportunity), the page for page-level types (blocker, internal links — several topics can share one page problem) and the signal for site-level types. The document id is `{businessId}_{dedupeKey}`, so the same situation found again **updates** the same document (detection count, evidence, scores) instead of creating a duplicate. Two different types on the same page/topic are different opportunities (e.g. a technical blocker and an internal-linking gap). The same page serving two topics with the same issue (e.g. a blocker) is deduped on the page, listing both topics.
 
 ## 8. Lifecycle
 
@@ -170,7 +170,7 @@ M5 output = candidates with evidence. M6 consumes them: builds the SearchIntent 
 ## 12. API / caching / governance
 
 - **No provider calls.** M5 reads Firestore only (inputs written by M3.2/M4). It cannot spend money or quota.
-- Deterministic analysis cache (MASTER §32): `inputHash = hash(engineVersion, configVersion, weights, sourceRunId, baselineId, approved topics + owner statuses, owner opportunity statuses, topicIntelligence ids+computedAt, seoPages pageKeys+lastCrawledAt)`. If the latest `opportunityRuns` row has the same hash, the run returns `cache_hit` and writes nothing else. Timestamps of the request itself are not part of the hash.
+- Deterministic analysis cache (MASTER §32): `inputHash = hash(engineVersion, configVersion, weights, sourceRunId, baselineId, approved topics + owner statuses, topicIntelligence ids+computedAt, seoPages pageKeys+lastCrawledAt+crawlStatus)`. Owner statuses on opportunities are not part of it: they never change detection. If the latest `opportunityRuns` row has the same hash, the run returns `cache_hit` and writes nothing else. Timestamps of the request itself are not part of the hash.
 - Triggered only by an explicit owner action (`visibilityRunOpportunityEngine`); never on render.
 - Rules: engine-written fields are protected — clients may update only `status` / `updatedAt` / owner notes on engine opportunities and may not create them; `opportunityRuns` is read-only for clients.
 
@@ -194,7 +194,36 @@ Deterministic, index-enforcing fake Firestore (`functions/test/opportunityEngine
 
 ## Implementation status
 
-See the PR. Decisions taken during implementation are appended below.
+**Implemented and tested on `feature/m5-opportunity-engine`** (PR). Live Hagar validation pending deploy (`functions`, `hosting:app`, `firestore:rules`).
+
+| Component | File |
+|---|---|
+| Config (weights, thresholds, effort, candidate actions; versioned) | `functions/opportunityConfig.js` |
+| Detection + scoring + evidence (pure) | `functions/opportunityRules.js` |
+| Run orchestration, cache, lifecycle, writes | `functions/opportunityEngineStore.js` |
+| HTTP endpoint `visibilityRunOpportunityEngine` | `functions/opportunityEngine.js` |
+| Rules: engine opportunities protected; `opportunityRuns` read-only | `firestore.rules` |
+| Inspection UI (פעולות → הזדמנויות) | `app/src/pages/business/EngineOpportunities.tsx` |
+| Tests (24) | `functions/test/opportunityEngine.test.js` |
+
+### Known limitations
+
+- Demand is the observed GSC floor (impressions for this business), not market demand; Semrush evidence is used only when already stored.
+- No trend, SERP, page-level traffic or conversions → no freshness/decay, competitor or conversion-value opportunities.
+- Topic ↔ page association inherits M4: observed (GSC) or text-containment inference; Hebrew morphology is not normalized.
+- GSC query × page is limited to 1,000 rows per period in M4 (25,000 is now supported — follow-up).
+- Score thresholds and effort levels are this engine's assumptions (labelled); they will be calibrated in M9.
+- Firestore rules changes are not covered by an emulator test in this repo (rules are reviewed; the fake Firestore doesn't evaluate rules).
+- A run interrupted mid-write leaves an `opportunityRuns` row in `running`; the next run recomputes (no partial cache hit, because only `completed` rows are reused).
+
+### Deferred
+
+- **M6:** SearchIntent, canonical ownership, cannibalization, final CREATE / IMPROVE / CONSOLIDATE / WAIT / MONITOR / REJECT, materialized `evidence` collection.
+- **M7:** ImpactPrediction (uses `impactInputs`), SEOChangeEvent, SEOExperiment, churn prevention.
+- **M8:** outcome measurement against `baselineId`.
+- **M9:** weight/threshold calibration from owner acceptance (`status`) vs detection (`engineState`) and outcomes.
+
+Decisions taken during implementation are appended below.
 
 ### ADR log
 
@@ -204,3 +233,6 @@ See the PR. Decisions taken during implementation are appended below.
 4. **Ordinal factors, band priority.** Avoids false precision; the numeric score is internal.
 5. **Owner status is never written after creation.** Lifecycle split into owner `status` and system `engineState`.
 6. **NO_ACTION / WAIT_FOR_DATA live on the run**, not as opportunity documents, so the list is never padded.
+7. **Two complementary findings may coexist on one topic** (e.g. position 4–10 *and* CTR far below the site's): different candidate actions, different evidence; M6 decides.
+8. **Page-level findings use only pages fetched in the latest crawl** — a stale observation never creates a new opportunity.
+9. **Site-level `entity_clarity` excludes structured-data coverage and audience/positioning**: Google documents no special markup requirement for AI features, and positioning needs M6 entity work. A *conflicting* fact (e.g. two phone numbers) is observed and gets high confidence; "missing" signals are assumption-based and capped at medium confidence.

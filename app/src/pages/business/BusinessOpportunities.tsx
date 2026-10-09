@@ -6,18 +6,23 @@ import { listenOpportunities, updateOpportunity, deleteOpportunity } from "../..
 import { OPPORTUNITY_STATUS_LABELS, PRIORITY_LABELS } from "../../types";
 import type { Opportunity, OpportunityStatus } from "../../types";
 import type { BusinessContext } from "./BusinessWorkspace";
+import { EngineOpportunities } from "./EngineOpportunities";
 
 export default function BusinessOpportunities() {
   const { business } = useOutletContext<BusinessContext>();
-  const [opportunities, setOpportunities] = useState<Opportunity[] | null>(null);
+  const [all, setAll] = useState<Opportunity[] | null>(null);
   const [showAdd, setShowAdd] = useState(false);
 
   useEffect(() => {
     if (!business) return;
-    return listenOpportunities(business.id, setOpportunities);
+    return listenOpportunities(business.id, setAll);
   }, [business]);
 
   if (!business) return <div className="loading-row">טוען…</div>;
+
+  // Engine opportunities (M5) and manual ones share the collection.
+  const engine = (all || []).filter((o) => o.source === "opportunity_engine");
+  const opportunities = all === null ? null : all.filter((o) => o.source !== "opportunity_engine");
 
   async function handleStatusChange(id: string, status: OpportunityStatus) {
     await updateOpportunity(id, { status });
@@ -30,9 +35,11 @@ export default function BusinessOpportunities() {
   }
 
   return (
-    <div className="section-block">
+    <div>
+    <EngineOpportunities businessId={business.id} opportunities={engine} />
+    <div className="section-block" style={{ marginTop: "var(--space-7)" }}>
       <div className="table-toolbar">
-        <h2 className="section-title" style={{ marginBottom: 0 }}>הזדמנויות</h2>
+        <h2 className="section-title" style={{ marginBottom: 0 }}>הזדמנויות ידניות</h2>
         <button className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>+ הזדמנות חדשה</button>
       </div>
 
@@ -41,7 +48,7 @@ export default function BusinessOpportunities() {
       {opportunities && opportunities.length === 0 && (
         <EmptyState
           title="אין עדיין הזדמנויות"
-          subtitle="הזדמנויות ייווצרו כאן ידנית כרגע. מנוע ההזדמנויות האוטומטי מתוכנן לשלב הבא."
+          subtitle="אפשר להוסיף כאן הזדמנויות משלך, בנוסף לאלה שהמערכת מזהה."
           action={<button className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>+ הזדמנות חדשה</button>}
         />
       )}
@@ -93,6 +100,7 @@ export default function BusinessOpportunities() {
       {showAdd && (
         <AddOpportunityModal businessId={business.id} onClose={() => setShowAdd(false)} onCreated={() => setShowAdd(false)} />
       )}
+    </div>
     </div>
   );
 }

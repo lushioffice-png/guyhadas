@@ -33,7 +33,8 @@ import type {
   TopicIntelligence,
   SeoPage,
   IntelligenceRun,
-  Baseline
+  Baseline,
+  OpportunityRun
 } from "../types";
 
 // How much history the Traffic/Search trend charts load. Milestone 3's
@@ -456,4 +457,14 @@ export function listenLatestIntelligenceRun(businessId: string, cb: (run: Intell
 
 export function listenBaselines(businessId: string, cb: (items: Baseline[]) => void): Unsubscribe {
   return byBusiness<Baseline>("baselines", businessId, (rows) => cb(rows.sort((a, b) => b.version - a.version)));
+}
+
+// --- M5 Opportunity Engine (runs are written by the Cloud Function only) ---
+export function listenLatestOpportunityRun(businessId: string, cb: (run: OpportunityRun | null) => void): Unsubscribe {
+  const q = query(collection(db, "opportunityRuns"), where("businessId", "==", businessId));
+  return onSnapshot(q, (snap) => {
+    const runs = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<OpportunityRun, "id">) })).filter((r) => r.status === "completed");
+    runs.sort((a, b) => (b.completedAtMs || 0) - (a.completedAtMs || 0));
+    cb(runs[0] || null);
+  });
 }

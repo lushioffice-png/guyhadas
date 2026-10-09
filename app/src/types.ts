@@ -80,10 +80,66 @@ export interface Opportunity {
   score?: number | null;
   status: OpportunityStatus;
   source?: string; // e.g. "manual", later: "opportunity_engine"
-  relatedPage?: string;
-  potentialValue?: string;
+  relatedPage?: string | null;
+  potentialValue?: string | null;
   createdAt: unknown;
   updatedAt: unknown;
+  // --- M5 Opportunity Engine fields (source "opportunity_engine"; written
+  // by the Cloud Function only - see firestore.rules) ---
+  dedupeKey?: string;
+  candidateActions?: string[];
+  targetTopicIds?: string[];
+  targetPageKeys?: string[];
+  factors?: OpportunityFactor[];
+  evidence?: OpportunityEvidence[];
+  confidence?: "high" | "medium" | "low";
+  confidenceReasons?: string[];
+  estimatedEffort?: { level: number; basis: string };
+  missing?: string[];
+  engineState?: "active" | "resolved";
+  firstDetectedAtMs?: number;
+  lastDetectedAtMs?: number;
+  detectionCount?: number;
+  baselineId?: string | null;
+  baselineMatchesRun?: boolean;
+  sourceRunId?: string;
+  ownerNote?: string;
+}
+
+export interface OpportunityFactor {
+  key: string;
+  level: number | null;
+  weight: number;
+  contribution: number | null;
+  basis: string;
+  explanation: string;
+  notApplicable?: boolean;
+}
+
+export interface OpportunityEvidence {
+  id: string;
+  sourceType: string;
+  sourceRef: { collection: string; docId: string; field: string | null };
+  observation: string | null;
+  basis: string;
+  capturedAtMs: number | null;
+}
+
+export interface OpportunityRun {
+  id: string;
+  businessId: string;
+  status: "running" | "completed";
+  completedAtMs?: number;
+  outcome?: string;
+  reason?: string;
+  intelligenceRunId: string | null;
+  baselineId: string | null;
+  baselineMatchesRun?: boolean;
+  topicEvaluations: { topicId: string; title: string; outcome: "opportunities" | "NO_ACTION" | "WAIT_FOR_DATA"; reasons?: string[]; types?: string[] }[];
+  summary: { opportunities: number; created?: number; updated?: number; resolved?: number; byPriority: Record<string, number>; byType: Record<string, number>; noAction: number; waitForData: number; approvedTopics: number };
+  weightsOverride?: Record<string, number>;
+  engineVersion?: number;
+  configVersion?: number;
 }
 
 export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
