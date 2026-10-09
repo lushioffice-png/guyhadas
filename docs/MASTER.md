@@ -1940,9 +1940,9 @@ M3.2 → M4 input: `searchTopics` with status relevant / priority / brand_strate
 Known limitations: Hebrew morphology not normalized (e.g. אדריכל / אדריכלות); the place guard knows only recorded places; English-only profile markets produce no geography seeds for Hebrew services (the UI asks for the Hebrew name). Google API governance gap: see §34 and §42.
 
 
-### M4 — Search Intelligence & Baseline (current)
+### M4 — Search Intelligence & Baseline
 
-**Status: IMPLEMENTED + TESTED on `feature/m4-search-intelligence`; live Hagar acceptance pending deploy.** Contract: `docs/M4_IMPLEMENTATION_BRIEF.md`; decisions and evidence: `docs/M4_IMPLEMENTATION_NOTES.md`.
+**Status: DONE — implemented, merged, deployed and live-validated on Hagar in October 2026.** Contract: `docs/M4_IMPLEMENTATION_BRIEF.md`; decisions and evidence: `docs/M4_IMPLEMENTATION_NOTES.md`.
 
 Implemented: page inventory with observed technical SEO state (`seoPages`); per-approved-topic intelligence with GSC current (query × page), GSC discovery and Semrush as separate evidence, observed vs inferred pages and explicit missing data (`topicIntelligence`); GEO readiness from website signals only (not AI visibility); run records (`intelligenceRuns`); immutable, versioned baselines (`baselines`, create-only; `businesses.baselineDate` is now a server-set pointer). One governed provider call (GSC query × page); no Semrush, GA4 or LLM call; SERP context `not_available`.
 
