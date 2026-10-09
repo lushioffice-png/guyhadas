@@ -1238,20 +1238,29 @@ success
 
 A cache hit must have providerCalled=false and cost=$0.
 
-### 34.1 Semrush API versioning
+### 34.1 Semrush API access and version strategy
 
-Semrush's current SEO API documentation is now v4-first for new Keyword Analytics integrations. The v4 Keyword Reports API exposes metrics such as search volume, keyword difficulty, search intent, CPC, competition, trends and SERP features. The previous v3 Keyword Reports methods are deprecated for new integrations, while reports that have not yet migrated remain available in v3.
+Semrush currently exposes both Version 3 and Version 4 APIs, with version-specific API keys and different supported endpoint coverage. Current Semrush documentation recommends Version 4 for new Keyword Reports integrations; existing Version 3 Keyword Reports integrations remain temporarily supported while migration continues. Version 4 Keyword Reports are currently in Early Access and can change before General Availability. cite-source-needed
 
-Therefore:
+For this product, **do not upgrade the Semrush subscription solely to obtain or preserve Version 3 access**.
 
-- Prefer Semrush v4 for new equivalent capabilities.
-- Retain v3 only where the required report has not migrated.
-- Treat v4 Early Access endpoints as version-sensitive and subject to change until General Availability.
-- Never make provider-specific terminology part of the intelligence model.
+The operating rule is:
 
-Source:
+- Use the Semrush API capabilities that are actually available on the user's current account.
+- Prefer Version 4 when the required capability exists in Version 4.
+- Do not build a dependency on Version 3 merely because an older implementation used it.
+- If a required capability is not available through the user's current Version 4 access, **defer that capability** rather than requiring a plan upgrade solely for an older API version, unless the owner explicitly approves the cost/benefit.
+- Treat the Semrush account's available API units as a recurring budget and govern consumption through the existing API governance layer.
+- Cache/reuse aggressively; do not spend units on page render, duplicate research or unnecessary re-runs.
+- Keep provider-specific version details inside the adapter layer, never in the core intelligence model.
+
+Semrush's current documentation states that Standard API access is an add-on to the Business tier and that purchased API units are included in the recurring subscription and renew on the subscription renewal date; unused units expire rather than rolling forward. The exact account entitlement must always be verified from the live Semrush account rather than assumed from the plan name. cite-source-needed
+
+Sources:
 https://developer.semrush.com/api/v4/seo/keyword-reports/
-https://developer.semrush.com/api/v4/seo/overview/
+https://developer.semrush.com/api/v4/get-started/authorization/
+https://www.semrush.com/kb/5-api
+https://developer.semrush.com/api/v3/introduction/api-versions/
 
 The governance contract is:
 
