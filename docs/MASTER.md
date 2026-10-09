@@ -2,7 +2,8 @@
 ## vNext Final — Business Understanding, Entity, Intent, Decision, Measurement & Learning
 
 **Status:** CANONICAL — product, architecture, implementation roadmap and acceptance specification  
-**Date:** 2026-10-08  
+**Date:** 2026-10-09
+**Freshness status:** Re-verified against current official Google Search / Search Console documentation and current Semrush API documentation on 2026-10-09. Time-sensitive external claims must be re-verified before major milestone implementation.  
 **Purpose:** This is the single Source of Truth shared by Guy, ChatGPT and Claude for the GuyHadas Visibility OS. It consolidates the SEO/GEO architecture, the NAZA-derived improvements already incorporated into vNext, M3.1 implementation decisions and acceptance results, Search Universe, Time-to-Impact / Outcome Learning, API governance, LLM website understanding, implementation boundaries, milestones and production-readiness criteria.
 
 ---
@@ -1237,6 +1238,21 @@ success
 
 A cache hit must have providerCalled=false and cost=$0.
 
+### 34.1 Semrush API versioning
+
+Semrush's current SEO API documentation is now v4-first for new Keyword Analytics integrations. The v4 Keyword Reports API exposes metrics such as search volume, keyword difficulty, search intent, CPC, competition, trends and SERP features. The previous v3 Keyword Reports methods are deprecated for new integrations, while reports that have not yet migrated remain available in v3.
+
+Therefore:
+
+- Prefer Semrush v4 for new equivalent capabilities.
+- Retain v3 only where the required report has not migrated.
+- Treat v4 Early Access endpoints as version-sensitive and subject to change until General Availability.
+- Never make provider-specific terminology part of the intelligence model.
+
+Source:
+https://developer.semrush.com/api/v4/seo/keyword-reports/
+https://developer.semrush.com/api/v4/seo/overview/
+
 The governance contract is:
 
 ```text
@@ -1462,9 +1478,9 @@ Consider, where observable:
 
 ### Website
 
-- domain age
+- domain age (contextual metadata only; not treated as a direct ranking factor)
 - historical organic visibility
-- authority proxy
+- authority proxy (explicitly a proxy, never a claimed Google score)
 - referring domains/backlink strength
 - existing organic traffic
 - indexed pages
@@ -1484,7 +1500,7 @@ Consider, where observable:
 - CTR
 - query coverage
 - page age
-- page authority
+- page authority proxy (explicitly a proxy)
 - internal links
 - orphan status
 - indexation status
@@ -1641,7 +1657,7 @@ Then learn by:
 
 - recommendation type
 - website
-- authority level
+- authority level / authority proxy (never treated as a direct Google metric)
 - starting position
 - industry
 - query difficulty
@@ -1685,6 +1701,21 @@ SEOExperiment
 # 39. LLM Website Understanding
 
 The system must eventually include a dedicated **LLM Website Understanding** capability.
+
+This must remain distinct from Google's own Search guidance. As of October 2026, Google states that existing foundational SEO practices remain relevant for AI Overviews and AI Mode and that there are no additional technical requirements or special optimizations required specifically to appear in those features. A page must still be indexed and eligible to appear in Google Search; eligibility does not guarantee crawling, indexing or serving.
+
+Google also provides first-party generative-AI performance reporting in Search Console. The OS should therefore distinguish:
+
+1. Google AI Search measurement — first-party observations where Search Console exposes them.
+2. External AI visibility measurement — observations from ChatGPT, Gemini, Copilot, Perplexity and other systems.
+3. LLM Website Understanding — what an LLM can infer about the business and site, regardless of whether that inference results in an observed AI citation.
+
+The system must never imply that there is a separate publicly documented "GEO ranking factor" merely because we use GEO as our internal intelligence framework.
+
+Sources:
+https://developers.google.com/search/docs/appearance/ai-features
+https://developers.google.com/search/blog/2026/06/gen-ai-performance-reports
+
 
 This is not a separate keyword research system.
 
@@ -1923,6 +1954,8 @@ Not implemented (M5+): opportunities, decisions, intent ownership, cannibalizati
 
 ### M4 — Search Intelligence & Baseline
 
+**Status: DONE — implemented, merged, deployed and live-validated on Hagar in October 2026.**
+
 - full Search Topic intelligence
 - SEO intelligence
 - GEO intelligence
@@ -1930,7 +1963,7 @@ Not implemented (M5+): opportunities, decisions, intent ownership, cannibalizati
 - immutable baselines
 - SERP context
 
-### M5 — Opportunity Engine
+### M5 — Opportunity Engine **(CURRENT NEXT MILESTONE)**
 
 - evidence-backed opportunities
 - CREATE vs IMPROVE candidates
@@ -2010,6 +2043,120 @@ OBSERVE
  → REPEAT
 ```
 
+### Future Product Directions — post-core milestones
+
+These are architecture/product notes only. They are not current implementation scope.
+
+#### Topic → Market Research → Site
+
+A future mode should accept a Topic rather than an existing business/site and begin with a Market Research Gate:
+
+~~~
+TOPIC
+  ↓
+MARKET RESEARCH
+  ↓
+TOPIC QUALIFICATION
+  ↓
+DOMAIN STRATEGY
+  ↓
+SITE SIZE / PAGE MAP
+  ↓
+INFORMATION ARCHITECTURE
+  ↓
+LAUNCH PLAN
+  ↓
+MEASUREMENT
+  ↓
+LEARNING
+~~~
+
+Market qualification should establish, where data is available:
+
+- real search demand
+- search-universe depth
+- traffic potential
+- languages / countries / markets
+- intent/topic families
+- commercial intent
+- competition
+- existing businesses / monetization
+- business-model potential
+- AI / GEO opportunity
+- whether the topic is deep enough to justify a site
+
+The system should be able to return "do not build" as a valid outcome.
+
+#### Stack-Aware SEO Execution
+
+A future implementation layer should detect a site's technology stack and generate technology-specific execution instructions.
+
+Example:
+
+~~~
+Astro + Firebase
+Next.js
+WordPress
+Other supported stack
+        ↓
+Fix capability matrix
+        ↓
+AUTO-FIX
+AGENT-FIX
+HUMAN REVIEW
+DO NOT AUTO-FIX
+        ↓
+Implementation Brief
+        ↓
+Test
+        ↓
+PR / Deploy
+~~~
+
+Technical SEO should become increasingly automatable when the change is deterministic, reversible and safe.
+
+#### External Search Intelligence
+
+A future intelligence layer should continuously ingest and evaluate:
+
+- Google Search / Search Central changes
+- Search Console changes
+- algorithm and spam updates
+- AI Search developments
+- practitioner observations
+- industry discussions
+- Reddit / community observations
+- search-demand / trend signals
+- relevant platform changes
+
+The output is not a news dump. It is:
+
+~~~
+SOURCE
+  ↓
+CLAIM / SIGNAL
+  ↓
+EVIDENCE
+  ↓
+CONFIDENCE
+  ↓
+CURRENT / CHANGED / UNCERTAIN / HYPOTHESIS / HISTORICAL
+  ↓
+POSSIBLE IMPACT ON THE OS
+~~~
+
+Community discussion can be a useful observation source, but must never become authoritative truth merely through volume of agreement.
+
+#### Hierarchical Architecture + Semantic Graph
+
+The future site-architecture model should combine:
+
+- hierarchy for navigation and topical organization
+- semantic relationships between pages/entities/intents
+- internal-link prominence and contextual relationships
+
+Do not encode a rigid silo or "link juice ladder" model.
+
 ### Future growth domains
 
 The same operating-system architecture may later extend to:
@@ -2070,6 +2217,8 @@ Existing legacy calendar/email functions must not silently become the pattern fo
 18. Rejected owner decisions are durable negative signals.
 19. Do not smuggle later milestones into an earlier milestone.
 20. No action is a valid system outcome.
+21. Time-sensitive external SEO/GEO/API assumptions must be freshness-verified against current evidence before they drive a major milestone implementation.
+22. The system must preserve whether a claim is current fact, observed behavior, inference, hypothesis, or historical practice; stale claims must not silently become architecture.
 
 ---
 
@@ -2112,7 +2261,7 @@ When these questions can be answered reliably, the system has moved from SEO res
 
 # 45. Canonical Document Status
 
-This file is the canonical Source of Truth for the GuyHadas Visibility OS.
+This file is the canonical Source of Truth for the GuyHadas Visibility OS. Section 46 formalizes freshness verification so the document itself can remain current.
 
 Any implementation agent must:
 
@@ -2125,3 +2274,112 @@ Any implementation agent must:
 7. never invent missing requirements merely because the code does not yet implement them
 8. explicitly document blocked or deferred capabilities
 
+
+## 46. Freshness / Current Truth Layer
+
+The GuyHadas Visibility OS must remain current as the external search ecosystem changes.
+
+This is a permanent architecture requirement, not a future optional feature.
+
+### 46.1 Freshness gate
+
+Before a major milestone is implemented, any time-sensitive external assumption that materially affects the milestone must be re-verified against current evidence.
+
+Prioritize:
+
+1. official Google Search / Search Console documentation
+2. official Google Search Status / anomaly information
+3. official provider API documentation
+4. current platform/product documentation
+5. high-quality secondary sources
+6. practitioner/community observations as supporting evidence
+
+### 46.2 Claim lifecycle
+
+Important external claims should conceptually support:
+
+~~~
+claim
+source
+source_type
+source_date
+verified_at
+confidence
+status
+supersedes
+contradicted_by
+~~~
+
+Suggested statuses:
+
+~~~
+CURRENT
+CHANGED
+UNCERTAIN
+HYPOTHESIS
+HISTORICAL
+~~~
+
+### 46.3 What this protects against
+
+The system must be able to detect when:
+
+- an API capability or limit changes
+- a Google Search feature launches or retires
+- a structured-data feature changes
+- a Search Console reporting surface changes
+- a ranking/spam update changes the interpretation window
+- an external SEO practice is no longer supported by current evidence
+- an old best practice should now be treated as historical rather than current
+
+### 46.4 Current October 2026 verified facts that affect architecture
+
+At the time of this document refresh:
+
+- Search Analytics API rowLimit supports up to 25,000 rows per request; Google documents internal limits and does not guarantee all rows. The daily maximum documented for Search Analytics is 50,000 rows per search type.
+- Search Console has current generative-AI performance reporting for Search / Discover, including AI Overviews and AI Mode.
+- Search Console has global web multimodal search performance reporting introduced in September 2026.
+- Google states there are no additional technical requirements specifically for AI Overviews / AI Mode beyond the normal Search eligibility and best practices.
+- Google updated generative-AI content guidance in October 2026 and its spam policies apply to generative-AI responses as well as classic Search.
+- FAQ rich results were deprecated beginning May 7, 2026.
+- Semrush's current API documentation recommends v4 for new Keyword Reports integrations; v3 Keyword Reports are deprecated, while non-migrated reports remain available in v3.
+
+These facts are external and time-sensitive. They must be re-verified rather than treated as permanent truths.
+
+### 46.5 Canonical external sources
+
+Google Search documentation:
+https://developers.google.com/search/
+
+Google Search documentation updates:
+https://developers.google.com/search/updates
+
+Search Console API:
+https://developers.google.com/webmaster-tools/v1/searchanalytics/query
+
+Search Console data anomalies:
+https://support.google.com/webmasters/answer/6211453
+
+Google Search Status Dashboard:
+https://status.search.google.com/
+
+Google AI features:
+https://developers.google.com/search/docs/appearance/ai-features
+
+Google generative-AI Search performance:
+https://developers.google.com/search/blog/2026/06/gen-ai-performance-reports
+
+Google multimodal Search Console reporting:
+https://developers.google.com/search/blog/2026/09/web-multimodal-in-sc
+
+Google generative-AI content:
+https://developers.google.com/search/docs/fundamentals/using-gen-ai-content
+
+Google spam policies:
+https://developers.google.com/search/docs/essentials/spam-policies
+
+Semrush API v4:
+https://developer.semrush.com/api/v4/seo/overview/
+https://developer.semrush.com/api/v4/seo/keyword-reports/
+
+This section does not authorize implementation of the freshness system yet. It establishes the architecture rule and the evidence baseline.
