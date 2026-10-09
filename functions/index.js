@@ -13,6 +13,7 @@ Object.assign(exports, require("./visibility"));
 Object.assign(exports, require("./businessUnderstanding"));
 Object.assign(exports, require("./searchUniverse"));
 Object.assign(exports, require("./searchIntelligence"));
+Object.assign(exports, require("./opportunityEngine"));
 
 const GUY_CALENDAR_EMAIL = "mr.hadas@gmail.com";
 

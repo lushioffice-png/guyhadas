@@ -79,8 +79,26 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // Manual opportunities stay fully owner-managed. Opportunities written by
+    // the M5 Opportunity Engine (source "opportunity_engine", Admin SDK only)
+    // carry evidence and scores that must stay intact: clients cannot create
+    // or delete them and may update only the owner fields (status, notes).
     match /opportunities/{opportunityId} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin();
+      allow create: if isAdmin() && request.resource.data.get("source", "manual") != "opportunity_engine";
+      allow update: if isAdmin() && (
+        resource.data.get("source", "manual") != "opportunity_engine"
+          ? request.resource.data.get("source", "manual") != "opportunity_engine"
+          : request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "ownerNote", "updatedAt"])
+      );
+      allow delete: if isAdmin() && resource.data.get("source", "manual") != "opportunity_engine";
+    }
+
+    // One record per Opportunity Engine run (topic outcomes incl. NO_ACTION).
+    // Written only by the Cloud Function.
+    match /opportunityRuns/{runId} {
+      allow read: if isAdmin();
+      allow write: if false;
     }
 
     // Integration status docs (ga4/search_console/semrush/...). Read-only
