@@ -1957,6 +1957,14 @@ Implemented: page inventory with observed technical SEO state (`seoPages`); per-
 
 Not implemented (M5+): opportunities, decisions, intent ownership, cannibalization, ImpactPrediction, change events, measurement/learning, AI visibility monitoring, LLM Website Understanding.
 
+### M5 — Opportunity Engine
+
+**Status: IMPLEMENTED + TESTED on `feature/m5-opportunity-engine`; live Hagar validation pending deploy.** Design and decisions: `docs/M5_OPPORTUNITY_ENGINE_DESIGN.md`.
+
+Deterministic, evidence-backed opportunity **candidates** from existing M3.2/M4 data only (no provider calls). Market demand (Semrush, unknown when unavailable) and observed search visibility (Search Console) are separate signals — Search Console impressions are never treated as market demand. Kinds: technical blockers on topic pages, ranking and CTR upside (CTR compared only with the site's own), coverage gaps, pages without visibility, internal linking for topic pages, observed page overlap (monitor, not a cannibalization verdict), and entity/fact clarity. Ordinal, labelled factors; priority band and confidence with reasons; embedded evidence referencing source documents; baseline id and impact inputs on every opportunity. Extends the existing `opportunities` collection (`source: "opportunity_engine"`); owner status never overwritten; rejection durable; NO_ACTION / WAIT_FOR_DATA recorded per topic on `opportunityRuns`; identical analysis is a $0 cache hit with no writes.
+
+Not implemented (M6+): SearchIntent, ownership, cannibalization, final decisions, ImpactPrediction, change events, measurement, learning.
+
 ---
 
 # 41. Future Milestones

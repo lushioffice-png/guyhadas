@@ -225,3 +225,17 @@ export interface CaptureBaselineResult {
 export function captureBaseline(businessId: string, note?: string): Promise<CaptureBaselineResult> {
   return callFunction<CaptureBaselineResult>("visibilityCaptureBaseline", { businessId, note });
 }
+
+// --- M5 Opportunity Engine (functions/opportunityEngine.js) ---
+// Explicit button only. Reads Firestore only - no provider call, no cost.
+export interface OpportunityEngineResult {
+  cacheHit: boolean;
+  decision: "cache_hit" | "computed";
+  runId: string;
+  providerCalled: false;
+  summary: { opportunities: number; created?: number; updated?: number; resolved?: number; noAction: number; waitForData: number };
+}
+
+export function runOpportunityEngine(businessId: string): Promise<OpportunityEngineResult> {
+  return callFunction<OpportunityEngineResult>("visibilityRunOpportunityEngine", { businessId });
+}
