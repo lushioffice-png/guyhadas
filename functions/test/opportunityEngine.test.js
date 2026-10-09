@@ -79,7 +79,7 @@ function fixture() {
       ["tExcluded", "exclude"]
     ].map(([id, status]) => ({ id, businessId: BIZ, title: id, status })),
     topicIntel: [
-      ti("tRank", "אדריכלות למגורים", gsc(400, 20, 8.4, []), { observed: [["architecture", 380, 8.2]] }),
+      ti("tRank", "אדריכלות למגורים", gsc(400, 20, 8.4, []), { observed: [["architecture", 380, 8.2]], semrush: 1300 }),
       ti("tCtr", "עיצוב פנים", gsc(300, 2, 2.5, []), { observed: [["interior", 300, 2.5]], intent: "informational", linked: false }),
       ti("tGap", "שיפוץ דירות", { status: "no_observation", period: PERIOD }),
       ti("tHidden", "תכנון בתים", { status: "no_observation", period: PERIOD }, { matched: ["orphan"] }),
@@ -199,11 +199,10 @@ const byType = (opps, type) => opps.filter((o) => o.type === type);
       }
       assert.ok(o.score >= 0 && o.score <= 100);
     }
-    const gap = byType(t.engineOpps(), "coverage_gap")[0];
-    assert.strictEqual(gap.factors.find((f) => f.key === "demand").level, 0, "observed zero impressions is 0 (observed), not unknown");
     const ent = byType(t.engineOpps(), "entity_clarity")[0];
-    assert.strictEqual(ent.factors.find((f) => f.key === "demand").level, null);
-    assert.ok(!ent.missing.includes("factor_unknown:demand"), "not-applicable is not reported as missing");
+    assert.strictEqual(ent.factors.find((f) => f.key === "marketDemand").level, null);
+    assert.ok(!ent.missing.includes("factor_unknown:marketDemand"), "not-applicable is not reported as missing");
+    assert.ok(t.engineOpps().every((o) => !o.factors.some((f) => f.key === "demand")), "no merged 'demand' factor any more");
   });
 
   await test("prioritization: bands are ordered and the guards hold", async () => {
@@ -229,7 +228,10 @@ const byType = (opps, type) => opps.filter((o) => o.type === type);
     const t = await setup();
     await t.run();
     const opps = t.engineOpps();
-    assert.strictEqual(byType(opps, "ranking_upside")[0].confidence, "high");
+    assert.strictEqual(byType(opps, "ranking_upside")[0].confidence, "high", "tRank has stored Semrush demand -> nothing unknown");
+    const ctr = byType(opps, "ctr_upside")[0];
+    assert.strictEqual(ctr.confidence, "medium", "no Semrush for tCtr -> market demand unknown lowers confidence");
+    assert.ok(ctr.confidenceReasons.some((r) => r.includes("ביקוש בשוק")));
     const hidden = byType(opps, "page_not_visible")[0];
     assert.notStrictEqual(hidden.confidence, "high");
     assert.ok(hidden.confidenceReasons.some((r) => r.includes("הסקה")));
@@ -290,17 +292,18 @@ const byType = (opps, type) => opps.filter((o) => o.type === type);
   });
 
   await test("weights: business override changes the cache identity; unknown/invalid keys ignored", async () => {
-    const { weights, applied } = resolveWeights({ demand: 5, bogus: 9, upside: -1, effortInverse: "3" });
-    assert.strictEqual(weights.demand, 5);
+    const { weights, applied } = resolveWeights({ marketDemand: 5, demand: 4, bogus: 9, upside: -1, effortInverse: "3" });
+    assert.strictEqual(weights.marketDemand, 5);
+    assert.ok(!("demand" in weights), "the old merged key is not a weight any more");
     assert.strictEqual(weights.upside, DEFAULT_WEIGHTS.upside);
-    assert.deepStrictEqual(applied, { demand: 5 });
+    assert.deepStrictEqual(applied, { marketDemand: 5 });
     const t = await setup();
     await t.run();
-    await t.db.collection("businesses").doc(BIZ).update({ opportunityWeights: { demand: 5 } });
+    await t.db.collection("businesses").doc(BIZ).update({ opportunityWeights: { marketDemand: 5 } });
     const r = await t.run(NOW + 1000);
     assert.strictEqual(r.decision, "computed");
     const run = t.fake.rows("opportunityRuns").find((x) => x.id === r.runId);
-    assert.deepStrictEqual(run.weightsOverride, { demand: 5 });
+    assert.deepStrictEqual(run.weightsOverride, { marketDemand: 5 });
   });
 
   await test("owner status is never overwritten; rejection is durable", async () => {
@@ -408,6 +411,98 @@ const byType = (opps, type) => opps.filter((o) => o.type === type);
       const src = fs.readFileSync(path.join(__dirname, "..", f), "utf8");
       assert.ok(!/require\("\.\/(semrush|googleSearchConsole|webUtils|businessUnderstanding)"\)|googleapis|fetch\(|runGoverned/.test(src), f);
     }
+  });
+
+  // --- market demand vs observed visibility -------------------------------
+  const factorOf = (o, k) => o.factors.find((f) => f.key === k);
+
+  await test("MD1 Semrush unavailable + GSC impressions -> market demand stays unknown", async () => {
+    const t = await setup();
+    await t.run();
+    const ctr = byType(t.engineOpps(), "ctr_upside")[0]; // tCtr: 300 impressions, no Semrush
+    assert.strictEqual(factorOf(ctr, "marketDemand").level, null);
+    assert.strictEqual(factorOf(ctr, "marketDemand").basis, "unknown");
+    assert.strictEqual(factorOf(ctr, "marketDemand").contribution, null);
+    assert.strictEqual(ctr.signals.marketDemand.source, null);
+    assert.ok(ctr.missing.includes("factor_unknown:marketDemand"));
+  });
+
+  await test("MD2 GSC impressions still count, as observed visibility from Search Console", async () => {
+    const t = await setup();
+    await t.run();
+    const ctr = byType(t.engineOpps(), "ctr_upside")[0];
+    const v = factorOf(ctr, "observedVisibility");
+    assert.ok(v.level >= 1 && v.basis === "observed");
+    assert.ok(v.explanation.includes("Search Console"));
+    assert.strictEqual(ctr.signals.visibility.source, "search_console");
+    assert.strictEqual(ctr.signals.visibility.impressions, 300);
+    const rank = byType(t.engineOpps(), "ranking_upside")[0];
+    assert.strictEqual(factorOf(rank, "marketDemand").basis, "observed", "Semrush stored -> market demand known");
+    assert.strictEqual(rank.signals.marketDemand.source, "semrush");
+  });
+
+  await test("MD3 zero GSC impressions never becomes zero market demand", async () => {
+    const t = await setup();
+    await t.run();
+    for (const type of ["coverage_gap", "page_not_visible"]) {
+      const o = byType(t.engineOpps(), type)[0];
+      assert.strictEqual(factorOf(o, "marketDemand").level, null, `${type}: market demand unknown, not 0`);
+      const v = factorOf(o, "observedVisibility");
+      assert.strictEqual(v.notApplicable, true, `${type}: missing visibility is the reason, not a low score`);
+      assert.strictEqual(v.contribution, null);
+    }
+  });
+
+  await test("MD4 coverage-gap confidence and priority reflect missing market demand", async () => {
+    const t = await setup((f) => {
+      f.baseline = { ...f.baseline }; // keep baseline so only market demand is missing
+      return f;
+    });
+    await t.run();
+    const gap = byType(t.engineOpps(), "coverage_gap")[0];
+    assert.strictEqual(gap.confidence, "medium");
+    assert.ok(gap.confidenceReasons.some((r) => r.includes("ביקוש בשוק")));
+    assert.notStrictEqual(gap.priority, "high", "unknown demand never inflates a demand-dependent gap to high");
+    // with market demand evidence the same gap regains full confidence
+    const t2 = await setup((f) => {
+      f.topicIntel = f.topicIntel.map((x) => (x.topicId === "tGap" ? { ...x, semrush: { status: "available", totalMonthlyVolume: 900 } } : x));
+      return f;
+    });
+    await t2.run();
+    const gap2 = byType(t2.engineOpps(), "coverage_gap")[0];
+    assert.strictEqual(gap2.confidence, "high");
+    assert.strictEqual(factorOf(gap2, "marketDemand").basis, "observed");
+  });
+
+  await test("MD5 page_not_visible / coverage_gap wording refers to Search Console and the period, never to absence from Google", async () => {
+    const t = await setup();
+    await t.run();
+    const forbidden = /לא מופיע בגוגל:|הוא לא מופיע בגוגל|אינו מופיע בגוגל|לא מופיע עבורו בגוגל|Google לא מציג|לא באינדקס/;
+    for (const type of ["page_not_visible", "coverage_gap"]) {
+      const o = byType(t.engineOpps(), type)[0];
+      assert.ok(!forbidden.test(o.title) && !forbidden.test(o.description), `${type} wording`);
+      assert.ok(o.title.includes("Search Console") || o.description.includes("Search Console"), `${type} names the source`);
+      assert.ok(o.description.includes("בתקופה"), `${type} names the observation window`);
+      for (const e of o.evidence) assert.ok(!forbidden.test(e.observation || ""), `${type} evidence`);
+    }
+    const hidden = byType(t.engineOpps(), "page_not_visible")[0];
+    assert.ok(hidden.description.includes("זה לא אומר שהדף לא מופיע בגוגל"), "explicit disclaimer");
+  });
+
+  await test("MD6 priorities unchanged by the split (only demand-dependent gaps are capped)", async () => {
+    const t = await setup();
+    await t.run();
+    const p = Object.fromEntries(t.engineOpps().map((o) => [o.type, o.priority]));
+    assert.deepStrictEqual(p, {
+      ranking_upside: "high",
+      technical_blocker: "high",
+      ctr_upside: "medium",
+      coverage_gap: "medium",
+      page_not_visible: "medium",
+      internal_linking: "medium",
+      entity_clarity: "medium",
+      page_overlap_observed: "low"
+    });
   });
 
   await test("fail closed: a Firestore read failure stops the run before any write", async () => {

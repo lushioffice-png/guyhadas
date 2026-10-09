@@ -17,10 +17,10 @@ const TYPE_LABELS: Record<string, string> = {
   technical_blocker: "בעיה טכנית",
   ranking_upside: "שיפור מיקום",
   ctr_upside: "יותר קליקים",
-  coverage_gap: "נושא בלי דף",
-  page_not_visible: "דף שלא מופיע",
+  coverage_gap: "לא נמצא דף לנושא",
+  page_not_visible: "דף בלי נראות ב-Search Console",
   internal_linking: "קישורים פנימיים",
-  page_overlap_observed: "כמה דפים לנושא",
+  page_overlap_observed: "כמה דפים עם חשיפות לנושא",
   entity_clarity: "בהירות פרטי העסק"
 };
 const ACTION_LABELS: Record<string, string> = {
@@ -39,7 +39,8 @@ const ACTION_LABELS: Record<string, string> = {
 const FACTOR_LABELS: Record<string, string> = {
   businessRelevance: "חשיבות לעסק",
   commercialValue: "ערך מסחרי",
-  demand: "ביקוש / חשיפות",
+  marketDemand: "ביקוש בשוק (Semrush)",
+  observedVisibility: "נראות שנמדדה (Search Console)",
   upside: "פוטנציאל שיפור",
   effortInverse: "קלות ביצוע"
 };

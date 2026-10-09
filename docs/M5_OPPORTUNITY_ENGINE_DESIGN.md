@@ -43,7 +43,8 @@ M5 answers: *given what the system knows now (approved Search Universe, M4 topic
 | Need | Source (existing) | Basis |
 |---|---|---|
 | Business relevance | `searchTopics.status` (owner), `topicIntelligence.business.linkedServices` | observed (owner decision) |
-| Current visibility, position, CTR, pages per topic | `topicIntelligence.gscCurrent` (governed GSC query × page) | observed |
+| Observed search visibility (impressions, clicks, position, CTR, pages per topic) | `topicIntelligence.gscCurrent` (governed GSC query × page) | observed |
+| Market demand | `topicIntelligence.semrush` when already stored (Semrush) — otherwise **unknown** | observed / unknown |
 | Site CTR reference | `intelligenceRuns.businessContext.searchConsole` | observed |
 | Page coverage | `topicIntelligence.pages.observed` / `.contentMatched` | observed / inferred |
 | Technical state | `seoPages` (indexability, canonical, robots, links, diagnostics) | observed (crawl-derived) |
@@ -53,7 +54,7 @@ M5 answers: *given what the system knows now (approved Search Universe, M4 topic
 
 **Missing (represented as unknown, never fabricated):**
 
-- External demand / volume / difficulty — Semrush live discovery deferred (§34.1). Demand falls back to *observed* GSC impressions (a floor, not market demand).
+- **Market demand** (search volume / difficulty) — Semrush live discovery deferred (§34.1). Market demand is therefore **unknown** for most topics; it is never derived from Search Console (see §9a).
 - Demand trend — only one 28-day query × page window exists; no history yet.
 - SERP features / competitors — no SERP provider.
 - Page-level traffic and conversions — no governed GA4 landing-page report.
@@ -75,7 +76,7 @@ opportunities/{businessId}_{dedupeKey}
   title, description         // plain Hebrew, generated from the evidence
   candidateActions[]         // MASTER §20 vocabulary — candidates, not decisions
   targetTopicIds[], targetQueryFamilyIds[] (= topic ids in M3.2), targetPageKeys[], targetEntityIds[] (empty until M6)
-  signals: { businessRelevance, commercialValue, demand, visibility, technical, content, entity, geo }   // levels + basis
+  signals: { businessRelevance, commercialValue, marketDemand {level, basis, source}, visibility {impressions, clicks, ctr, position, level, basis, source: "search_console"}, technical, content, entity, geo }
   factors[]                  // scoring breakdown: key, level, weight, contribution, basis, explanation
   score, priority (high|medium|low), confidence (high|medium|low) + confidenceReasons[]
   estimatedEffort { level, basis: "assumption" }
@@ -151,13 +152,35 @@ Ordinal levels 0–3 per factor; `null` = unknown (excluded from the score, lowe
 |---|---|---|
 | `businessRelevance` | owner status priority / brand_strategic = 3; relevant = 2; +1 (max 3) if linked to a confirmed service; site-level = 2 | observed (owner) |
 | `commercialValue` | preliminary intent commercial / local or commercial modifier = 3; navigational = 2; informational = 1; unclassified = null | inference |
-| `demand` | GSC impressions tier **relative to this business's approved topics** (top third = 3, middle = 2, lower = 1, none observed = 0); Semrush volume used when present | observed |
+| `marketDemand` | Semrush monthly volume tier relative to this business's approved topics, **only when Semrush evidence exists**; otherwise `null` (unknown — excluded from the score, lowers confidence). Never derived from Search Console | observed / unknown |
+| `observedVisibility` | Search Console impressions tier relative to this business's approved topics (no impressions observed = 0). Scored only where existing visibility is the value at stake (ranking / CTR / overlap, and page findings on pages observed for a topic). For coverage gaps and pages without visibility it is **not applicable**: the missing visibility is the reason for the opportunity, not evidence of low value | observed |
 | `upside` | type-specific: blocker on a visible page = 3; position 4–10 = 3, 11–20 = 2; CTR < 50 % of site CTR = 3; coverage gap = 2; … | observed + assumption (position tiers) |
 | `effortInverse` | technical / CTR / internal links = 3 (small), ranking/content/entity = 2, new page / overlap review = 1 | assumption |
 
 `score = Σ weight × level` over known factors, normalized to 0–100 for sorting only. **Priority** = band from the score (high ≥ 75, medium ≥ 50, else low), with guards: technical blockers on an approved-topic page are at least medium; site-level clarity items and any low-confidence finding are at most medium; overlap observations are capped at low (monitor). (Thresholds were raised from a first draft of 65/40 after a fixture run put almost everything in "high".) The UI shows the band and the factor list, not the number. Weights live in `functions/opportunityConfig.js` (versioned) and can be overridden per business via `businesses.opportunityWeights` (known keys only).
 
 **Confidence** (separate from priority): starts high; −1 per: GSC current data not available for the target, a key factor unknown, the main page evidence is inferred, the target page was not crawled in the latest run, no baseline. high / medium / low with the reasons listed.
+
+## 9a. Market demand vs observed search visibility
+
+Two different things, kept apart everywhere (factors, signals, evidence, wording):
+
+| | Market demand | Observed search visibility |
+|---|---|---|
+| Meaning | How much the market searches for the topic | What Search Console observed **for this business** in the analysis period |
+| Source | Semrush (or a future demand provider) | Search Console (governed query × page) |
+| When unavailable | `null` / unknown — never 0 | `not_available` |
+| Used for | Value of demand-dependent opportunities | Ranking / CTR / overlap rules, and value where visibility already exists |
+
+Rules:
+
+- Search Console impressions are **never** interpreted as market demand (MASTER: *GSC is actual current visibility, not the complete market universe*). A topic can have zero impressions for this site and large demand in the market.
+- Zero impressions is an observation about **this site's visibility in the period**, not "zero demand". For `coverage_gap` and `page_not_visible`, absent visibility is the reason the opportunity exists, so it is not scored as low value.
+- Unknown market demand lowers confidence (with the reason "ביקוש בשוק לא ידוע") and caps demand-dependent kinds (`coverage_gap`, `page_not_visible`) at medium; it never implies low demand.
+- *Search volume is evidence, not strategy*: when Semrush evidence exists it raises the market-demand factor, but never creates an opportunity by itself.
+- Wording follows the evidence: "no visibility in Search Console for the topic's queries during {period}" — never "the page does not appear in Google" or "is not indexed" without direct evidence.
+
+This split was made in review of PR #31 (config version 2). Priorities on the reference fixture were unchanged by it; scores moved, and confidence dropped to medium wherever market demand is unknown.
 
 ## 10. Relationship to the M4 baseline
 
@@ -208,7 +231,7 @@ Deterministic, index-enforcing fake Firestore (`functions/test/opportunityEngine
 
 ### Known limitations
 
-- Demand is the observed GSC floor (impressions for this business), not market demand; Semrush evidence is used only when already stored.
+- Market demand is unknown for topics without stored Semrush evidence (most topics today); confidence is lowered accordingly and demand-dependent gaps are capped at medium.
 - No trend, SERP, page-level traffic or conversions → no freshness/decay, competitor or conversion-value opportunities.
 - Topic ↔ page association inherits M4: observed (GSC) or text-containment inference; Hebrew morphology is not normalized.
 - GSC query × page is limited to 1,000 rows per period in M4 (25,000 is now supported — follow-up).
@@ -228,7 +251,7 @@ Decisions taken during implementation are appended below.
 ### ADR log
 
 1. **Extend `opportunities`, don't add a collection.** One opportunity concept; manual and engine opportunities share the list, distinguished by `source`.
-2. **No provider calls in M5.** Demand falls back to observed GSC impressions; Semrush evidence is used only if already stored.
+2. **No provider calls in M5.** Semrush evidence is used only if already stored; otherwise market demand is unknown.
 3. **Embedded evidence with stable ids** instead of an `evidence` collection — fewer writes, still traceable; materializable later.
 4. **Ordinal factors, band priority.** Avoids false precision; the numeric score is internal.
 5. **Owner status is never written after creation.** Lifecycle split into owner `status` and system `engineState`.
@@ -236,3 +259,4 @@ Decisions taken during implementation are appended below.
 7. **Two complementary findings may coexist on one topic** (e.g. position 4–10 *and* CTR far below the site's): different candidate actions, different evidence; M6 decides.
 8. **Page-level findings use only pages fetched in the latest crawl** — a stale observation never creates a new opportunity.
 9. **Site-level `entity_clarity` excludes structured-data coverage and audience/positioning**: Google documents no special markup requirement for AI features, and positioning needs M6 entity work. A *conflicting* fact (e.g. two phone numbers) is observed and gets high confidence; "missing" signals are assumption-based and capped at medium confidence.
+10. **Market demand ≠ observed visibility** (§9a): `demand` split into `marketDemand` (Semrush only, unknown otherwise) and `observedVisibility` (Search Console). Config version 2; the old `demand` weight key is ignored.

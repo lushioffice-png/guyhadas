@@ -123,19 +123,29 @@ function commercialOf(ti) {
   return { level: null, basis: "unknown", explanation: "כוונת החיפוש לא סווגה" };
 }
 
-function demandOf(ti, ctx) {
-  const g = ti.gscCurrent || {};
-  const gsc = g.status === "available" ? g.impressions || 0 : g.status === "no_observation" ? 0 : null;
-  const sem = ti.semrush && ti.semrush.status === "available" ? ti.semrush.totalMonthlyVolume || 0 : null;
-  const gl = tierLevel(gsc, ctx.imprT);
-  const sl = tierLevel(sem, ctx.volT);
-  if (gl == null && sl == null) return { level: null, basis: "unknown", explanation: "אין נתוני חשיפות או ביקוש" };
-  const level = Math.max(gl ?? 0, sl ?? 0);
-  const parts = [];
-  if (gsc != null) parts.push(`${gsc} חשיפות בגוגל (נמדד; ביחס לשאר הנושאים שלך)`);
-  if (sem != null) parts.push(`${sem} חיפושים בחודש לפי Semrush`);
-  return { level, basis: "observed", explanation: parts.join(" · ") };
+// MARKET DEMAND: external demand only (Semrush today). Search Console
+// impressions are NOT market demand - a topic can have zero impressions for
+// this site and large demand in the market. Unknown when unavailable.
+function marketDemandOf(ti, ctx) {
+  const sem = ti.semrush && ti.semrush.status === "available" ? ti.semrush.totalMonthlyVolume : null;
+  if (sem == null) return { level: null, basis: "unknown", source: null, explanation: "ביקוש בשוק לא ידוע — אין נתוני Semrush (נתוני Search Console משקפים נראות של האתר, לא ביקוש בשוק)" };
+  return { level: tierLevel(sem, ctx.volT), basis: "observed", source: "semrush", explanation: `${sem} חיפושים בחודש לפי Semrush (סכום השאילתות; ביחס לשאר הנושאים שלך)` };
 }
+
+// OBSERVED VISIBILITY: what Search Console measured for this business in the
+// analysis period - actual current visibility, not the market.
+function visibilityOf(ti, ctx) {
+  const g = ti.gscCurrent || {};
+  const period = g.period ? ` (${g.period.startDate} – ${g.period.endDate})` : "";
+  if (g.status === "available") return { level: tierLevel(g.impressions || 0, ctx.imprT), basis: "observed", source: "search_console", explanation: `${g.impressions || 0} חשיפות ב-Search Console${period}, ביחס לשאר הנושאים שלך` };
+  if (g.status === "no_observation") return { level: 0, basis: "observed", source: "search_console", explanation: `לא נרשמו חשיפות ב-Search Console לשאילתות הנושא${period}` };
+  return { level: null, basis: "unknown", source: null, explanation: "אין נתוני Search Console עדכניים" };
+}
+
+const FACTOR_NAMES = { businessRelevance: "חשיבות לעסק", commercialValue: "ערך מסחרי", marketDemand: "ביקוש בשוק", observedVisibility: "נראות שנמדדה", upside: "פוטנציאל", effortInverse: "קלות ביצוע" };
+// Opportunity kinds whose case rests on demand rather than on visibility we
+// already observed: with unknown market demand they are at most medium.
+const DEMAND_DEPENDENT = new Set(["coverage_gap", "page_not_visible"]);
 
 function factor(key, f, weight) {
   return { key, level: f.level, weight, contribution: f.level == null ? null : f.level * weight, basis: f.basis, explanation: f.explanation };
@@ -168,7 +178,7 @@ function confidenceOf({ gscAvailable, unknownFactors, inferredTarget, uncrawledT
   }
   if (unknownFactors.length) {
     level--;
-    reasons.push(`חסר מידע: ${unknownFactors.join(", ")}`);
+    reasons.push(`לא ידוע: ${unknownFactors.map((k) => FACTOR_NAMES[k] || k).join(", ")}`);
   }
   if (inferredTarget) {
     level--;
@@ -201,7 +211,7 @@ function topicEvidence(ti, ctx) {
   if (g.status === "available") {
     out.push(evidence(`topicIntelligence/${ti.id}#gscCurrent`, "search_console", { collection: "topicIntelligence", docId: ti.id, field: "gscCurrent" }, `${g.impressions} חשיפות, ${g.clicks} קליקים, מיקום ממוצע ${round(g.avgPosition)}, CTR ${round((g.ctr || 0) * 100)}% (${g.period ? `${g.period.startDate} – ${g.period.endDate}` : ""})`, "observed", ti.computedAtMs));
   } else {
-    out.push(evidence(`topicIntelligence/${ti.id}#gscCurrent`, "search_console", { collection: "topicIntelligence", docId: ti.id, field: "gscCurrent" }, g.status === "no_observation" ? "שאילתות הנושא לא הופיעו בגוגל בתקופה" : `אין נתוני Search Console: ${g.reason || "לא זמין"}`, "observed", ti.computedAtMs));
+    out.push(evidence(`topicIntelligence/${ti.id}#gscCurrent`, "search_console", { collection: "topicIntelligence", docId: ti.id, field: "gscCurrent" }, g.status === "no_observation" ? `לא נרשמו חשיפות ב-Search Console לשאילתות הנושא${g.period ? ` בתקופה ${g.period.startDate} – ${g.period.endDate}` : " בתקופה שנבדקה"}` : `אין נתוני Search Console: ${g.reason || "לא זמין"}`, "observed", ti.computedAtMs));
   }
   const linked = ((ti.business && ti.business.linkedServices) || []).filter((s) => s.confirmed);
   if (linked.length) out.push(evidence(`topicIntelligence/${ti.id}#business.linkedServices`, "service_map", { collection: "topicIntelligence", docId: ti.id, field: "business.linkedServices" }, `קשור לשירות: ${linked.map((s) => s.name).join(", ")}`, linked.some((s) => s.basis === "observed") ? "observed" : "inference", ti.computedAtMs));
@@ -239,8 +249,12 @@ function detect(input, weights) {
     const s = score(o.factors);
     const unknown = o.factors.filter((f) => f.level == null && !f.notApplicable).map((f) => f.key);
     const conf = confidenceOf({ ...o.conf, unknownFactors: unknown, hasBaseline });
-    const priority = band(o.type, s, conf.confidence);
-    const valueFactors = o.factors.filter((f) => ["businessRelevance", "demand", "upside"].includes(f.key) && f.level != null);
+    let priority = band(o.type, s, conf.confidence);
+    // Unknown market demand must not inflate an opportunity whose case rests
+    // on demand (it is excluded from the score, so cap the band instead).
+    const md = o.factors.find((f) => f.key === "marketDemand");
+    if (DEMAND_DEPENDENT.has(o.type) && md && md.level == null && priority === "high") priority = "medium";
+    const valueFactors = o.factors.filter((f) => ["businessRelevance", "marketDemand", "observedVisibility", "upside"].includes(f.key) && f.level != null);
     const valueLevel = valueFactors.length ? Math.round(valueFactors.reduce((a, f) => a + f.level, 0) / valueFactors.length) : null;
     const missing = [...new Set([...(o.missing || []), ...unknown.map((k) => `factor_unknown:${k}`), ...(hasBaseline ? [] : ["no_baseline"])])];
     delete o.conf;
@@ -264,8 +278,13 @@ function detect(input, weights) {
     const matched = (ti.pages && ti.pages.contentMatched) || [];
     const rel = relevanceOf(ti, ctx);
     const com = commercialOf(ti);
-    const dem = demandOf(ti, ctx);
-    const common = [factor("businessRelevance", rel, weights.businessRelevance), factor("commercialValue", com, weights.commercialValue), factor("demand", dem, weights.demand)];
+    const dem = marketDemandOf(ti, ctx);
+    const vis = visibilityOf(ti, ctx);
+    const common = [factor("businessRelevance", rel, weights.businessRelevance), factor("commercialValue", com, weights.commercialValue), factor("marketDemand", dem, weights.marketDemand)];
+    const visFactor = factor("observedVisibility", vis, weights.observedVisibility);
+    // For gap kinds the absence of visibility is the reason the opportunity
+    // exists - it is not scored as low value, and never as low demand.
+    const visNotApplicable = { ...factor("observedVisibility", { level: null, basis: "observed", explanation: `${vis.explanation} — זו הסיבה להזדמנות, לא ראיה לביקוש נמוך` }, weights.observedVisibility), notApplicable: true };
     const tEvidence = topicEvidence(ti, ctx);
     const found = [];
     const topicBase = (type, extra) => ({
@@ -289,10 +308,10 @@ function detect(input, weights) {
       found.push(
         topicBase("ranking_upside", {
           title: `שיפור מיקום: „${ti.title}“`,
-          description: `הנושא כבר מופיע בגוגל במיקום ממוצע ${round(pos)} עם ${impressions} חשיפות. דף קיים קרוב לראש התוצאות, ולכן שיפור שלו עשוי להביא יותר קליקים.`,
+          description: `לפי Search Console, הנושא קיבל ${impressions} חשיפות במיקום ממוצע ${round(pos)} בתקופה שנבדקה. דף קיים קרוב לראש התוצאות, ולכן שיפור שלו עשוי להביא יותר קליקים.`,
           targetPageKeys: [mainPage.pageKey],
           relatedPage: mainPage.url,
-          factors: [...common, factor("upside", { level: strong ? 3 : 2, basis: "assumption", explanation: `מיקום ממוצע ${round(pos)} — ${strong ? "בעמוד הראשון אבל לא בראשו" : "קרוב לעמוד הראשון"} (הנחה: דפים בטווח הזה מגיבים לשיפור)` }, weights.upside), effortFactor("ranking_upside")],
+          factors: [...common, visFactor, factor("upside", { level: strong ? 3 : 2, basis: "assumption", explanation: `מיקום ממוצע ${round(pos)} — ${strong ? "בעמוד הראשון אבל לא בראשו" : "קרוב לעמוד הראשון"} (הנחה: דפים בטווח הזה מגיבים לשיפור)` }, weights.upside), effortFactor("ranking_upside")],
           evidence: [...tEvidence, evidence(`topicIntelligence/${ti.id}#gscCurrent.pages`, "search_console", { collection: "topicIntelligence", docId: ti.id, field: "gscCurrent.pages" }, `דף מוביל לנושא: ${mainPage.url} · ${mainPage.impressions} חשיפות · מיקום ${round(mainPage.position)}`, "observed", ti.computedAtMs), ...baselineEvidence(ctx)],
           conf: { gscAvailable: true, inferredTarget: false, uncrawledTarget: !crawled || crawled.crawlStatus !== "fetched" },
           impactInputs: { targetType: "topic", targetId: ti.topicId, pageKey: mainPage.pageKey, baselineId: ctx.baseline ? ctx.baseline.id : null, current: metricsOf(ti), period: g.period || null }
@@ -306,10 +325,10 @@ function detect(input, weights) {
       found.push(
         topicBase("ctr_upside", {
           title: `יותר קליקים מאותן הופעות: „${ti.title}“`,
-          description: `הנושא מופיע בעמוד הראשון (מיקום ${round(pos)}), אבל רק ${round((g.ctr || 0) * 100)}% מהרואים לוחצים — לעומת ${round(ctx.siteCtr * 100)}% באתר כולו. כדאי לבדוק את הכותרת והתיאור שמופיעים בתוצאות.`,
+          description: `לפי Search Console הנושא מופיע בעמוד הראשון (מיקום ממוצע ${round(pos)}), אבל רק ${round((g.ctr || 0) * 100)}% מהרואים לוחצים — לעומת ${round(ctx.siteCtr * 100)}% באתר כולו. כדאי לבדוק את הכותרת והתיאור שמופיעים בתוצאות.`,
           targetPageKeys: [mainPage.pageKey],
           relatedPage: mainPage.url,
-          factors: [...common, factor("upside", { level: 3, basis: "observed", explanation: `CTR ${round((g.ctr || 0) * 100)}% מול ${round(ctx.siteCtr * 100)}% באתר (נמדד)` }, weights.upside), effortFactor("ctr_upside")],
+          factors: [...common, visFactor, factor("upside", { level: 3, basis: "observed", explanation: `CTR ${round((g.ctr || 0) * 100)}% מול ${round(ctx.siteCtr * 100)}% באתר (נמדד)` }, weights.upside), effortFactor("ctr_upside")],
           evidence: [...tEvidence, evidence(`intelligenceRuns/${ctx.run.id}#businessContext.searchConsole`, "search_console", { collection: "intelligenceRuns", docId: ctx.run.id, field: "businessContext.searchConsole" }, `CTR של האתר כולו: ${round(ctx.siteCtr * 100)}%`, "observed", ctx.run.completedAtMs), ...baselineEvidence(ctx)],
           conf: { gscAvailable: true, inferredTarget: false, uncrawledTarget: !crawled || crawled.crawlStatus !== "fetched" },
           impactInputs: { targetType: "topic", targetId: ti.topicId, pageKey: mainPage.pageKey, baselineId: ctx.baseline ? ctx.baseline.id : null, current: metricsOf(ti), period: g.period || null }
@@ -324,11 +343,11 @@ function detect(input, weights) {
       if ((second.impressions || 0) >= Math.max(5, total * 0.1)) {
         found.push(
           topicBase("page_overlap_observed", {
-            title: `כמה דפים מופיעים לאותו נושא: „${ti.title}“`,
-            description: `${observed.length} דפים שונים מופיעים בגוגל לשאילתות של הנושא. זו תצפית למעקב — ההחלטה אם לאחד או להשאיר תתקבל בשלב ההחלטות.`,
+            title: `כמה דפים קיבלו חשיפות לאותו נושא: „${ti.title}“`,
+            description: `לפי Search Console, ${observed.length} דפים שונים קיבלו חשיפות לשאילתות של הנושא בתקופה שנבדקה. זו תצפית למעקב — ההחלטה אם לאחד או להשאיר תתקבל בשלב ההחלטות.`,
             targetPageKeys: observed.map((p) => p.pageKey),
             relatedPage: observed[0].url,
-            factors: [...common, factor("upside", { level: 1, basis: "hypothesis", explanation: "ייתכן שהדפים מתחרים זה בזה — השערה שתיבדק בשלב ההחלטות" }, weights.upside), effortFactor("page_overlap_observed")],
+            factors: [...common, visFactor, factor("upside", { level: 1, basis: "hypothesis", explanation: "ייתכן שהדפים מתחרים זה בזה — השערה שתיבדק בשלב ההחלטות" }, weights.upside), effortFactor("page_overlap_observed")],
             evidence: [...tEvidence, evidence(`topicIntelligence/${ti.id}#gscCurrent.pages`, "search_console", { collection: "topicIntelligence", docId: ti.id, field: "gscCurrent.pages" }, observed.map((p) => `${p.url} (${p.impressions})`).join(" · "), "observed", ti.computedAtMs)],
             conf: { gscAvailable: true, inferredTarget: false, uncrawledTarget: false },
             impactInputs: { targetType: "topic", targetId: ti.topicId, baselineId: ctx.baseline ? ctx.baseline.id : null, current: metricsOf(ti), period: g.period || null }
@@ -342,12 +361,12 @@ function detect(input, weights) {
       if (matched.length === 0) {
         found.push(
           topicBase("coverage_gap", {
-            title: `אין דף לנושא: „${ti.title}“`,
-            description: `אישרת את הנושא, אבל אף דף באתר לא מופיע עבורו בגוגל ולא נמצא דף שעוסק בו. בשלב ההחלטות ייקבע אם להרחיב דף קיים או ליצור דף חדש.`,
+            title: `לא נמצא דף לנושא: „${ti.title}“`,
+            description: `אישרת את הנושא, אבל לא זוהתה כרגע נראות ב-Search Console לנושא בתקופה שנבדקה, וגם לא נמצא בסריקה דף שעוסק בו. זה לא אומר שאין ביקוש לנושא. בשלב ההחלטות ייקבע אם להרחיב דף קיים או ליצור דף חדש.`,
             targetPageKeys: [],
             relatedPage: null,
-            factors: [...common, factor("upside", { level: 2, basis: "inference", explanation: "נושא מאושר ללא כיסוי באתר (הסקה מהסריקה ומנתוני גוגל)" }, weights.upside), effortFactor("coverage_gap")],
-            evidence: [...tEvidence, evidence(`topicIntelligence/${ti.id}#pages`, "crawl", { collection: "topicIntelligence", docId: ti.id, field: "pages" }, "לא נמצא דף שמופיע בגוגל לנושא ולא דף שכותרת הנושא מופיעה בו", "inference", ti.computedAtMs)],
+            factors: [...common, visNotApplicable, factor("upside", { level: 2, basis: "inference", explanation: "נושא מאושר בלי דף שנמצא בסריקה ובלי נראות שנמדדה (הסקה)" }, weights.upside), effortFactor("coverage_gap")],
+            evidence: [...tEvidence, evidence(`topicIntelligence/${ti.id}#pages`, "crawl", { collection: "topicIntelligence", docId: ti.id, field: "pages" }, "לא נמדדה ב-Search Console נראות לשאילתות הנושא בתקופה, ולא נמצא בסריקה דף שכותרת הנושא מופיעה בו", "inference", ti.computedAtMs)],
             conf: { gscAvailable: true, inferredTarget: false, uncrawledTarget: false },
             impactInputs: { targetType: "topic", targetId: ti.topicId, baselineId: ctx.baseline ? ctx.baseline.id : null, current: metricsOf(ti), period: g.period || null }
           })
@@ -357,11 +376,11 @@ function detect(input, weights) {
         const crawled = ctx.pagesByKey.get(p0.pageKey);
         found.push(
           topicBase("page_not_visible", {
-            title: `יש דף, אבל הוא לא מופיע בגוגל: „${ti.title}“`,
-            description: `נמצא באתר דף שעוסק בנושא (${p0.url}), אבל שאילתות הנושא לא הופיעו בגוגל בתקופה. ייתכן שהדף לא עונה על מה שמחפשים, או שעדיין מוקדם.`,
+            title: `יש דף לנושא, אבל כרגע אין לו נראות ב-Search Console: „${ti.title}“`,
+            description: `נמצא באתר דף שעוסק בנושא (${p0.url}), אבל בתקופה שנבדקה${g.period ? ` (${g.period.startDate} – ${g.period.endDate})` : ""} לא נרשמו ב-Search Console חשיפות לשאילתות של הנושא. זה לא אומר שהדף לא מופיע בגוגל בכלל — רק שלא נמדדה לו נראות לשאילתות האלה בתקופה הזו. ייתכן שהדף לא עונה על מה שמחפשים, או שעדיין מוקדם.`,
             targetPageKeys: matched.map((p) => p.pageKey),
             relatedPage: p0.url,
-            factors: [...common, factor("upside", { level: 2, basis: "inference", explanation: "דף קיים ללא נראות לנושא" }, weights.upside), effortFactor("page_not_visible")],
+            factors: [...common, visNotApplicable, factor("upside", { level: 2, basis: "inference", explanation: "דף קיים בלי נראות שנמדדה ב-Search Console לנושא" }, weights.upside), effortFactor("page_not_visible")],
             evidence: [...tEvidence, evidence(`topicIntelligence/${ti.id}#pages.contentMatched`, "crawl", { collection: "topicIntelligence", docId: ti.id, field: "pages.contentMatched" }, `דף קשור לפי התוכן: ${matched.map((p) => p.url).join(" · ")}`, "inference", ti.computedAtMs)],
             conf: { gscAvailable: true, inferredTarget: true, uncrawledTarget: !crawled || crawled.crawlStatus !== "fetched" },
             impactInputs: { targetType: "topic", targetId: ti.topicId, pageKey: p0.pageKey, baselineId: ctx.baseline ? ctx.baseline.id : null, current: metricsOf(ti), period: g.period || null }
@@ -376,8 +395,8 @@ function detect(input, weights) {
       const page = ctx.pagesByKey.get(ap.pageKey);
       if (!page || page.crawlStatus !== "fetched") continue;
       const blk = blockerOf(page);
-      if (blk) addPageOpp("technical_blocker", page, ti, ap, { blk, rel, com, dem });
-      if (!isHome(page) && page.links && page.links.inboundInternalCount === 0) addPageOpp("internal_linking", page, ti, ap, { rel, com, dem });
+      if (blk) addPageOpp("technical_blocker", page, ti, ap, { blk, rel, com, dem, vis });
+      if (!isHome(page) && page.links && page.links.inboundInternalCount === 0) addPageOpp("internal_linking", page, ti, ap, { rel, com, dem, vis });
     }
 
     if (found.length) {
@@ -390,19 +409,19 @@ function detect(input, weights) {
       if (pos != null) reasons.push(`מיקום ממוצע ${round(pos)}${pos < THRESHOLDS.upsidePositionMin ? " — כבר בראש התוצאות" : pos > THRESHOLDS.upsidePositionMax ? " — רחוק מהעמוד הראשון" : ""}`);
       if (g.status === "available" && !enoughImpr) reasons.push(`${impressions} חשיפות — מתחת לסף (${ctx.minImpr}) שממנו המערכת מסיקה מסקנות`);
       if (!gscKnown) reasons.push("אין נתוני Search Console עדכניים");
-      if (observed.length) reasons.push("יש דף שמופיע לנושא בגוגל, ולא נמצאה בו בעיה טכנית");
+      if (observed.length) reasons.push("יש דף עם נראות שנמדדה ב-Search Console לנושא, ולא נמצאה בו בעיה טכנית");
       evaluations.push({ topicId: ti.topicId, title: ti.title, outcome: "NO_ACTION", reasons });
     }
   }
 
-  function addPageOpp(type, page, ti, ap, { blk, rel, com, dem }) {
+  function addPageOpp(type, page, ti, ap, { blk, rel, com, dem, vis }) {
     const key = `${type}|${page.pageKey}`;
     const existing = pageOpps.get(key);
     if (existing) {
       if (!existing.targetTopicIds.includes(ti.topicId)) {
         existing.targetTopicIds.push(ti.topicId);
         existing.targetQueryFamilyIds.push(ti.topicId);
-        existing._topics.push({ ti, ap, rel, com, dem });
+        existing._topics.push({ ti, ap, rel, com, dem, vis });
       }
       return;
     }
@@ -416,7 +435,7 @@ function detect(input, weights) {
       keyParts: { pageKeys: [page.pageKey] },
       _page: page,
       _blk: blk || null,
-      _topics: [{ ti, ap, rel, com, dem }]
+      _topics: [{ ti, ap, rel, com, dem, vis }]
     });
   }
 
@@ -426,13 +445,18 @@ function detect(input, weights) {
     const best = (k) => o._topics.map((t) => t[k]).reduce((a, b) => ((b.level ?? -1) > (a.level ?? -1) ? b : a));
     const anyObserved = o._topics.some((t) => t.ap.basis === "observed");
     const topicsTitle = o._topics.map((t) => `„${t.ti.title}“`).join(", ");
+    // Visibility counts as value only where this page was actually observed
+    // for a topic; for a content-matched page it is not applicable.
+    const pageVis = anyObserved
+      ? factor("observedVisibility", o._topics.filter((t) => t.ap.basis === "observed").map((t) => t.vis).reduce((a, b) => ((b.level ?? -1) > (a.level ?? -1) ? b : a)), weights.observedVisibility)
+      : { ...factor("observedVisibility", { level: null, basis: "observed", explanation: "לדף לא נמדדה נראות ב-Search Console לנושאים האלה — לא נספר כערך נמוך" }, weights.observedVisibility), notApplicable: true };
     const tEvidence = o._topics.flatMap((t) => topicEvidence(t.ti, ctx)).filter((e, i, arr) => arr.findIndex((x) => x.id === e.id) === i);
     let rec;
     if (o.type === "technical_blocker") {
       rec = {
         title: `בעיה טכנית בדף שמשרת נושא מאושר: ${page.title || page.url}`,
         description: `${BLOCKER_TEXT[o._blk.code]}. הדף משרת את ${topicsTitle}. כדאי לוודא שזה לא מכוון.`,
-        factors: [factor("businessRelevance", best("rel"), weights.businessRelevance), factor("commercialValue", best("com"), weights.commercialValue), factor("demand", best("dem"), weights.demand), factor("upside", { level: anyObserved ? 3 : 2, basis: "observed", explanation: `${BLOCKER_TEXT[o._blk.code]}${anyObserved ? " — והדף כבר מקבל חשיפות בגוגל לנושא" : ""}` }, weights.upside), effortFactor("technical_blocker")],
+        factors: [factor("businessRelevance", best("rel"), weights.businessRelevance), factor("commercialValue", best("com"), weights.commercialValue), factor("marketDemand", best("dem"), weights.marketDemand), pageVis, factor("upside", { level: anyObserved ? 3 : 2, basis: "observed", explanation: `${BLOCKER_TEXT[o._blk.code]}${anyObserved ? " — והדף כבר קיבל חשיפות ב-Search Console לנושא" : ""}` }, weights.upside), effortFactor("technical_blocker")],
         evidence: [...tEvidence, { ...pageEvidence(page, o._blk.code.startsWith("canonical") ? "canonical" : o._blk.code === "blocked_by_robots" ? "robots" : "indexability"), observation: `${BLOCKER_TEXT[o._blk.code]}${o._blk.detail ? ` (${o._blk.detail})` : ""}` }, ...baselineEvidence(ctx)],
         conf: { gscAvailable: o._topics.some((t) => (t.ti.gscCurrent || {}).status === "available"), inferredTarget: !anyObserved, uncrawledTarget: false },
         signalExtra: { technical: { level: 3, code: o._blk.code } }
@@ -441,7 +465,7 @@ function detect(input, weights) {
       rec = {
         title: `אין קישורים פנימיים לדף שמשרת נושא מאושר: ${page.title || page.url}`,
         description: `אף דף אחר מבין הדפים שנבדקו לא מקשר לדף הזה, והוא משרת את ${topicsTitle}. קישורים מדפים קשורים עוזרים לגולשים ולמנועי חיפוש להגיע אליו.`,
-        factors: [factor("businessRelevance", best("rel"), weights.businessRelevance), factor("commercialValue", best("com"), weights.commercialValue), factor("demand", best("dem"), weights.demand), factor("upside", { level: 2, basis: "assumption", explanation: "קישורים פנימיים מדפים קשורים עוזרים לגילוי ולהבנה של הדף (הנחה)" }, weights.upside), effortFactor("internal_linking")],
+        factors: [factor("businessRelevance", best("rel"), weights.businessRelevance), factor("commercialValue", best("com"), weights.commercialValue), factor("marketDemand", best("dem"), weights.marketDemand), pageVis, factor("upside", { level: 2, basis: "assumption", explanation: "קישורים פנימיים מדפים קשורים עוזרים לגילוי ולהבנה של הדף (הנחה)" }, weights.upside), effortFactor("internal_linking")],
         evidence: [...tEvidence, { ...pageEvidence(page, "links"), observation: `0 קישורים נכנסים מבין ${page.links && page.links.scope ? page.links.scope.replace(/^counted among /, "").replace(/ crawled pages$/, "") : ""} הדפים שנבדקו` }, ...baselineEvidence(ctx)],
         conf: { gscAvailable: o._topics.some((t) => (t.ti.gscCurrent || {}).status === "available"), inferredTarget: !anyObserved, uncrawledTarget: false },
         signalExtra: { technical: { level: 1, code: "no_inbound_internal_links" } }
@@ -505,7 +529,8 @@ function detect(input, weights) {
         factors: [
           factor("businessRelevance", { level: 2, basis: "assumption", explanation: "נוגע לכל האתר" }, weights.businessRelevance),
           { ...factor("commercialValue", { level: null, basis: "not_applicable", explanation: "לא רלוונטי ברמת האתר" }, weights.commercialValue), notApplicable: true },
-          { ...factor("demand", { level: null, basis: "not_applicable", explanation: "לא רלוונטי ברמת האתר" }, weights.demand), notApplicable: true },
+          { ...factor("marketDemand", { level: null, basis: "not_applicable", explanation: "לא רלוונטי ברמת האתר" }, weights.marketDemand), notApplicable: true },
+          { ...factor("observedVisibility", { level: null, basis: "not_applicable", explanation: "לא רלוונטי ברמת האתר" }, weights.observedVisibility), notApplicable: true },
           factor("upside", { level: upLevel, basis: conflict ? "observed" : "assumption", explanation: conflict ? "נמצאו פרטים סותרים באתר (נמדד)" : "בהירות פרטי העסק עוזרת להבנה (הנחה)" }, weights.upside),
           effortFactor("entity_clarity")
         ],
@@ -524,8 +549,10 @@ function detect(input, weights) {
     o.signals = {
       businessRelevance: sig("businessRelevance"),
       commercialValue: sig("commercialValue"),
-      demand: sig("demand"),
-      visibility: o.impactInputs && o.impactInputs.current ? { ...o.impactInputs.current, basis: "observed" } : null,
+      // External market demand (unknown without a demand provider) and
+      // Search Console visibility are separate signals - never merged.
+      marketDemand: f.marketDemand ? { level: f.marketDemand.level, basis: f.marketDemand.basis, source: f.marketDemand.level == null ? null : "semrush" } : null,
+      visibility: o.impactInputs && o.impactInputs.current ? { ...o.impactInputs.current, level: f.observedVisibility ? f.observedVisibility.level : null, basis: "observed", source: "search_console" } : null,
       technical: (o.signalExtra && o.signalExtra.technical) || null,
       content: o.type === "coverage_gap" || o.type === "page_not_visible" ? { level: 2, basis: "inference" } : null,
       entity: null,

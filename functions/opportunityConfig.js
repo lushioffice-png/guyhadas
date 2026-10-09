@@ -11,12 +11,18 @@
 // calibration).
 
 const ENGINE_VERSION = 1;
-const CONFIG_VERSION = 1;
+const CONFIG_VERSION = 2; // 2: market demand separated from observed visibility
 
+// marketDemand = external market demand (Semrush or another demand
+// provider) - unknown when unavailable, never derived from Search Console.
+// observedVisibility = what Search Console observed for this business
+// (impressions/clicks/position/CTR) - actual current visibility, not the
+// market.
 const DEFAULT_WEIGHTS = Object.freeze({
   businessRelevance: 3,
   commercialValue: 2,
-  demand: 2,
+  marketDemand: 2,
+  observedVisibility: 2,
   upside: 3,
   effortInverse: 1
 });
